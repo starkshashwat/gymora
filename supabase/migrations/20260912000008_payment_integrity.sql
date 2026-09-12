@@ -152,11 +152,12 @@ BEGIN
   END IF;
 
   -- Insert payment
+  v_payment_id := gen_random_uuid();
   INSERT INTO public.payments (
-    gym_id, member_id, membership_id, amount, payment_method, status, notes, idempotency_key, created_by
+    id, gym_id, member_id, membership_id, amount, payment_method, status, notes, idempotency_key, created_by
   ) VALUES (
-    p_gym_id, p_member_id, p_membership_id, p_amount, p_payment_method, 'paid', p_notes, p_idempotency_key, auth.uid()
-  ) RETURNING id INTO v_payment_id;
+    v_payment_id, p_gym_id, p_member_id, p_membership_id, p_amount, p_payment_method, 'paid', p_notes, p_idempotency_key, auth.uid()
+  );
 
   -- Update membership status logically based on new total
   v_total_paid := v_total_paid + p_amount;
@@ -234,23 +235,25 @@ BEGIN
   END IF;
 
   -- Insert Membership
+  v_membership_id := gen_random_uuid();
   INSERT INTO public.memberships (
-    gym_id, member_id, plan_id, plan_name_snapshot, amount_due, start_date, due_date, end_date, status
+    id, gym_id, member_id, plan_id, plan_name_snapshot, amount_due, start_date, due_date, end_date, status
   ) VALUES (
-    p_gym_id, p_member_id, p_plan_id, v_plan.name, v_plan.price, p_start_date, p_start_date, v_end_date, v_status
-  ) RETURNING id INTO v_membership_id;
+    v_membership_id, p_gym_id, p_member_id, p_plan_id, v_plan.name, v_plan.price, p_start_date, p_start_date, v_end_date, v_status
+  );
 
   -- Member Status Update (if previously inactive)
   UPDATE public.members SET status = 'active', updated_at = now() WHERE id = p_member_id;
 
   -- Insert Payment if amount > 0
   IF p_amount_paid > 0 THEN
+    v_payment_id := gen_random_uuid();
     -- Generate idempotency key for this payment if not provided
     INSERT INTO public.payments (
-      gym_id, member_id, membership_id, amount, payment_method, status, idempotency_key, created_by
+      id, gym_id, member_id, membership_id, amount, payment_method, status, idempotency_key, created_by
     ) VALUES (
-      p_gym_id, p_member_id, v_membership_id, p_amount_paid, p_payment_method, 'paid', p_idempotency_key, auth.uid()
-    ) RETURNING id INTO v_payment_id;
+      v_payment_id, p_gym_id, p_member_id, v_membership_id, p_amount_paid, p_payment_method, 'paid', p_idempotency_key, auth.uid()
+    );
   END IF;
 
   -- Audit log
@@ -317,9 +320,9 @@ BEGIN
   WHERE gym_id = p_gym_id AND normalized_phone = v_reg.normalized_phone LIMIT 1;
 
   IF NOT FOUND THEN
-    INSERT INTO public.members (gym_id, full_name, phone, email, normalized_phone)
-    VALUES (p_gym_id, v_reg.full_name, v_reg.phone, v_reg.email, v_reg.normalized_phone)
-    RETURNING id INTO v_member_id;
+    v_member_id := gen_random_uuid();
+    INSERT INTO public.members (id, gym_id, full_name, phone, email, normalized_phone)
+    VALUES (v_member_id, p_gym_id, v_reg.full_name, v_reg.phone, v_reg.email, v_reg.normalized_phone);
   ELSE
     -- Re-activate cancelled/inactive member with updated details
     UPDATE public.members
@@ -342,19 +345,21 @@ BEGIN
   v_end_date := v_start_date + COALESCE(v_plan.duration_days - 1, 30);
 
   -- Insert Membership
+  v_membership_id := gen_random_uuid();
   INSERT INTO public.memberships (
-    gym_id, member_id, plan_id, plan_name_snapshot, amount_due, start_date, due_date, end_date, status
+    id, gym_id, member_id, plan_id, plan_name_snapshot, amount_due, start_date, due_date, end_date, status
   ) VALUES (
-    p_gym_id, v_member_id, v_reg.plan_id, v_reg.plan_name_snapshot, COALESCE(v_plan.price, v_reg.plan_price_snapshot), v_start_date, v_start_date, v_end_date, v_status
-  ) RETURNING id INTO v_membership_id;
+    v_membership_id, p_gym_id, v_member_id, v_reg.plan_id, v_reg.plan_name_snapshot, COALESCE(v_plan.price, v_reg.plan_price_snapshot), v_start_date, v_start_date, v_end_date, v_status
+  );
 
   -- Insert Payment if amount > 0
   IF p_amount_paid > 0 THEN
+    v_payment_id := gen_random_uuid();
     INSERT INTO public.payments (
-      gym_id, member_id, membership_id, amount, payment_method, status, notes, idempotency_key, created_by
+      id, gym_id, member_id, membership_id, amount, payment_method, status, notes, idempotency_key, created_by
     ) VALUES (
-      p_gym_id, v_member_id, v_membership_id, p_amount_paid, p_payment_method, 'paid', p_notes, p_idempotency_key, auth.uid()
-    ) RETURNING id INTO v_payment_id;
+      v_payment_id, p_gym_id, v_member_id, v_membership_id, p_amount_paid, p_payment_method, 'paid', p_notes, p_idempotency_key, auth.uid()
+    );
   END IF;
 
   -- Mark converted
@@ -563,13 +568,13 @@ BEGIN
   v_normalized_phone := '+91' || RIGHT(REGEXP_REPLACE(p_phone, '\D', '', 'g'), 10);
 
   -- Insert registration
+  v_registration_id := gen_random_uuid();
   INSERT INTO public.registration_requests (
-    gym_id, full_name, phone, email, plan_id, plan_name_snapshot, plan_price_snapshot, status, normalized_phone
+    id, gym_id, full_name, phone, email, plan_id, plan_name_snapshot, plan_price_snapshot, status, normalized_phone
   )
   VALUES (
-    v_gym_id, p_full_name, p_phone, p_email, p_plan_id, v_plan.name, v_plan.price, 'pending', v_normalized_phone
-  )
-  RETURNING id INTO v_registration_id;
+    v_registration_id, v_gym_id, p_full_name, p_phone, p_email, p_plan_id, v_plan.name, v_plan.price, 'pending', v_normalized_phone
+  );
 
   RETURN jsonb_build_object(
     'success', true,
