@@ -9,11 +9,19 @@ ALTER TABLE public.registration_requests ADD COLUMN IF NOT EXISTS normalized_pho
 
 -- Update existing rows (strip all non-digits, prepend +91 for standard Indian numbers if length is 10)
 UPDATE public.members 
-SET normalized_phone = '+91' || RIGHT(REGEXP_REPLACE(phone, '\D', '', 'g'), 10)
+SET normalized_phone = CASE 
+  WHEN LENGTH(REGEXP_REPLACE(phone, '\D', '', 'g')) >= 10 
+  THEN '+91' || RIGHT(REGEXP_REPLACE(phone, '\D', '', 'g'), 10)
+  ELSE NULL 
+END
 WHERE normalized_phone IS NULL;
 
 UPDATE public.registration_requests 
-SET normalized_phone = '+91' || RIGHT(REGEXP_REPLACE(phone, '\D', '', 'g'), 10)
+SET normalized_phone = CASE 
+  WHEN LENGTH(REGEXP_REPLACE(phone, '\D', '', 'g')) >= 10 
+  THEN '+91' || RIGHT(REGEXP_REPLACE(phone, '\D', '', 'g'), 10)
+  ELSE NULL 
+END
 WHERE normalized_phone IS NULL;
 
 -- 2. PAYMENT IDEMPOTENCY
@@ -22,6 +30,61 @@ ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS idempotency_key text;
 -- Prevent duplicate idempotency keys within the same gym
 DROP INDEX IF EXISTS payments_idempotency_idx;
 CREATE UNIQUE INDEX payments_idempotency_idx ON public.payments(gym_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- 2.5 DEDUPLICATE EXISTING MEMBERS BY (gym_id, normalized_phone)
+-- If duplicate members already exist in the database, merge their memberships and payments to the primary record
+DO $$
+DECLARE
+  r RECORD;
+  v_keeper_id uuid;
+  v_dup_id uuid;
+BEGIN
+  FOR r IN (
+    SELECT gym_id, normalized_phone
+    FROM public.members
+    WHERE normalized_phone IS NOT NULL
+    GROUP BY gym_id, normalized_phone
+    HAVING count(*) > 1
+  ) LOOP
+    -- Prefer active member, then latest updated_at/created_at
+    SELECT id INTO v_keeper_id
+    FROM public.members
+    WHERE gym_id = r.gym_id AND normalized_phone = r.normalized_phone
+    ORDER BY (CASE WHEN status = 'active' THEN 1 ELSE 2 END), updated_at DESC, created_at DESC
+    LIMIT 1;
+
+    -- Re-link all dependent records from duplicates to the keeper record
+    FOR v_dup_id IN (
+      SELECT id
+      FROM public.members
+      WHERE gym_id = r.gym_id 
+        AND normalized_phone = r.normalized_phone
+        AND id <> v_keeper_id
+    ) LOOP
+      UPDATE public.memberships
+      SET member_id = v_keeper_id
+      WHERE member_id = v_dup_id;
+
+      UPDATE public.payments
+      SET member_id = v_keeper_id
+      WHERE member_id = v_dup_id;
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'automation_logs') THEN
+        UPDATE public.automation_logs
+        SET member_id = v_keeper_id
+        WHERE member_id = v_dup_id;
+      END IF;
+
+      UPDATE public.audit_logs
+      SET entity_id = v_keeper_id
+      WHERE entity_type = 'member' AND entity_id = v_dup_id;
+
+      DELETE FROM public.members
+      WHERE id = v_dup_id;
+    END LOOP;
+  END LOOP;
+END;
+$$;
 
 -- 3. MEMBER PHONE UNIQUENESS
 -- Prevent concurrent duplicate member creation
@@ -257,6 +320,14 @@ BEGIN
     INSERT INTO public.members (gym_id, full_name, phone, email, normalized_phone)
     VALUES (p_gym_id, v_reg.full_name, v_reg.phone, v_reg.email, v_reg.normalized_phone)
     RETURNING id INTO v_member_id;
+  ELSE
+    -- Re-activate cancelled/inactive member with updated details
+    UPDATE public.members
+    SET status = 'active',
+        full_name = v_reg.full_name,
+        email = COALESCE(v_reg.email, email),
+        updated_at = now()
+    WHERE id = v_member_id;
   END IF;
 
   -- Calculate membership status
@@ -430,10 +501,12 @@ $$;
 -- 10. PROTECT FINANCIAL HISTORY FROM CASCADE DELETE
 -- ==============================================================================
 -- We don't want payments or memberships to be deleted if a member is deleted
+ALTER TABLE public.payments ALTER COLUMN member_id DROP NOT NULL;
 ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_member_id_fkey;
 ALTER TABLE public.payments ADD CONSTRAINT payments_member_id_fkey 
   FOREIGN KEY (member_id) REFERENCES public.members(id) ON DELETE SET NULL;
 
+ALTER TABLE public.memberships ALTER COLUMN member_id DROP NOT NULL;
 ALTER TABLE public.memberships DROP CONSTRAINT IF EXISTS memberships_member_id_fkey;
 ALTER TABLE public.memberships ADD CONSTRAINT memberships_member_id_fkey 
   FOREIGN KEY (member_id) REFERENCES public.members(id) ON DELETE SET NULL;
