@@ -87,13 +87,9 @@ export async function middleware(request: NextRequest) {
   // -------------------------------------------------------------
   // 3. Authenticate User Session
   // -------------------------------------------------------------
-  let isAuthenticated = false;
-
-  // Rapid check: Gymora session cookie
-  const demoCookie = request.cookies.get('gymora_session');
-  if (demoCookie && demoCookie.value === 'true') {
-    isAuthenticated = true;
-  }
+  let isSupabaseAuthenticated = false;
+  const isDemoSession = request.cookies.get('gymora_demo_mode')?.value === 'true';
+  const hasSessionCookie = request.cookies.get('gymora_session')?.value === 'true';
 
   // Supabase Auth SSR verification
   let response = NextResponse.next({
@@ -129,23 +125,33 @@ export async function middleware(request: NextRequest) {
       } = await supabase.auth.getUser();
 
       if (user) {
-        isAuthenticated = true;
+        isSupabaseAuthenticated = true;
       }
     } catch {
       // Fallback seamlessly if Supabase request times out
     }
   }
 
+  const isActuallyAuthenticated = isSupabaseAuthenticated || hasSessionCookie;
+  const canAccessDashboard = isActuallyAuthenticated || isDemoSession;
+
   // -------------------------------------------------------------
   // 4. Route Enforcement & Redirection
   // -------------------------------------------------------------
-  if (isProtectedRoute && !isAuthenticated) {
+  if (isProtectedRoute && !canAccessDashboard) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('returnUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname === '/login' && isAuthenticated) {
+  // If user visits /login while in demo mode, clear demo cookie so login is 100% clean!
+  if (pathname === '/login' && isDemoSession && !isActuallyAuthenticated) {
+    response.cookies.delete('gymora_demo_mode');
+    return response;
+  }
+
+  // ONLY redirect away from /login if user is legitimately authenticated with a real account
+  if (pathname === '/login' && isActuallyAuthenticated) {
     const returnUrl = request.nextUrl.searchParams.get('returnUrl') || '/dashboard';
     return NextResponse.redirect(new URL(returnUrl, request.url));
   }

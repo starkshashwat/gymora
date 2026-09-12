@@ -19,7 +19,7 @@ import { AuthModal } from '@/components/ui/auth-modal';
 export default function RootLandingPage() {
   const [isExistingSession, setIsExistingSession] = useState(false);
 
-  // Check if session already exists
+  // Check if real Supabase auth session exists
   useEffect(() => {
     try {
       const supabase = createClient();
@@ -28,9 +28,6 @@ export default function RootLandingPage() {
           setIsExistingSession(true);
         }
       });
-      if (document.cookie.includes('gymora_session=true')) {
-        setIsExistingSession(true);
-      }
     } catch {
       // Ignore
     }
@@ -58,17 +55,26 @@ export default function RootLandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/demo"
+              className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition hidden sm:block"
+            >
+              See Demo
+            </Link>
             {isExistingSession ? (
               <Link
                 href="/dashboard"
                 className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-zinc-100 hover:bg-white text-zinc-950 px-4 text-xs font-semibold shadow-sm transition"
               >
-                <span>Go to Dashboard</span>
+                <span>Dashboard</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             ) : (
               <Link
                 href="/login"
+                onClick={() => {
+                  document.cookie = 'gymora_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                }}
                 className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 px-4 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition"
               >
                 Sign In
@@ -85,60 +91,73 @@ export default function RootLandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
-            {/* Left Column: Value Proposition */}
-            <div className="lg:col-span-7 space-y-6 text-left">
+            <div className="lg:col-span-12 space-y-8 text-center max-w-4xl mx-auto flex flex-col items-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/90 px-3.5 py-1 text-xs font-medium text-zinc-300">
                 <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                 <span>The Modern Gym Payment & Member Platform</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.1]">
+              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-white tracking-tight leading-[1.1]">
                 Collect Gym Dues on <span className="text-emerald-400">Autopilot</span>.
                 <br />
                 Stop Chasing Payments.
               </h1>
 
-              <p className="text-base sm:text-lg text-zinc-400 max-w-2xl leading-relaxed font-normal">
+              <p className="text-base sm:text-xl text-zinc-400 max-w-2xl leading-relaxed font-normal">
                 Everything gym owners need to run seamless operations: zero-fee UPI QR, instant
                 reception desk registration, automated WhatsApp fee reminders, and 1-click Excel migration.
               </p>
 
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
+                <Link
+                  href="/signup"
+                  onClick={() => {
+                    document.cookie = 'gymora_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                  }}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-8 text-sm font-bold text-zinc-950 transition hover:bg-zinc-200"
+                >
+                  Try Now Free
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/demo"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/50 px-8 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+                >
+                  See Demo
+                </Link>
+              </div>
+
               {/* Feature Highlights Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div className="flex items-center gap-2.5 text-sm font-semibold text-zinc-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Direct UPI QR + Razorpay / PhonePe</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-8 w-full max-w-4xl">
+                <div className="flex flex-col items-center gap-2 text-sm font-semibold text-zinc-300 bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                  <span className="text-center">Direct UPI QR + Gateways</span>
                 </div>
-                <div className="flex items-center gap-2.5 text-sm font-semibold text-zinc-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>1-Tap WhatsApp Payment Alerts</span>
+                <div className="flex flex-col items-center gap-2 text-sm font-semibold text-zinc-300 bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                  <span className="text-center">1-Tap WhatsApp Alerts</span>
                 </div>
-                <div className="flex items-center gap-2.5 text-sm font-semibold text-zinc-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Front Desk QR Member Self-Onboarding</span>
+                <div className="flex flex-col items-center gap-2 text-sm font-semibold text-zinc-300 bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                  <span className="text-center">Front Desk QR Standee</span>
                 </div>
-                <div className="flex items-center gap-2.5 text-sm font-semibold text-zinc-300">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                  <span>Bulk Excel / CSV Member Import</span>
+                <div className="flex flex-col items-center gap-2 text-sm font-semibold text-zinc-300 bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800/50">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                  <span className="text-center">Bulk Excel Import</span>
                 </div>
               </div>
 
               {/* Security & Multi-tenant note */}
-              <div className="pt-4 flex items-center gap-4 text-xs font-semibold text-zinc-400">
+              <div className="pt-4 flex flex-wrap justify-center items-center gap-4 text-xs font-semibold text-zinc-500">
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="h-4 w-4 text-emerald-400" />
                   <span>End-to-end Encrypted</span>
                 </div>
-                <div className="h-3 w-[1px] bg-zinc-800" />
+                <div className="hidden sm:block h-3 w-[1px] bg-zinc-800" />
                 <span>Multi-tenant Subdomain Ready</span>
-                <div className="h-3 w-[1px] bg-zinc-800" />
+                <div className="hidden sm:block h-3 w-[1px] bg-zinc-800" />
                 <span>Zero Transaction Fees on UPI</span>
               </div>
-            </div>
-
-            {/* Right Column: Single Unified Sleek Auth Portal (Google + Email) */}
-            <div className="lg:col-span-5 flex justify-center lg:justify-end">
-              <AuthModal isInline={true} mode="signup" />
             </div>
 
           </div>

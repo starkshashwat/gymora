@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Navbar from '@/components/layout/Navbar';
+import { usePathname } from 'next/navigation';
+import Sidebar from '@/components/layout/Sidebar';
 import AddMemberModal from '@/components/members/AddMemberModal';
 import { MembershipPlan } from '@/lib/types/database';
 
@@ -10,6 +11,8 @@ export default function OwnerLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isOnboarding = pathname === '/onboarding' || pathname.startsWith('/onboarding');
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
 
@@ -24,13 +27,29 @@ export default function OwnerLayout({
   };
 
   useEffect(() => {
+    if (isOnboarding) return;
     fetchPlans();
-  }, []);
+    
+    // Listen for add member requests from anywhere
+    const handleOpenAddMember = () => setIsAddMemberOpen(true);
+    window.addEventListener('gym:open-add-member', handleOpenAddMember);
+    return () => window.removeEventListener('gym:open-add-member', handleOpenAddMember);
+  }, [isOnboarding]);
+
+  if (isOnboarding) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 selection:bg-zinc-900 selection:text-white">
+        <main className="w-full">
+          {children}
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex flex-col selection:bg-zinc-900 selection:text-white">
-      <Navbar onAddMemberClick={() => setIsAddMemberOpen(true)} />
-      <main className="flex-1 pb-16">
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex flex-col md:flex-row selection:bg-zinc-900 selection:text-white">
+      <Sidebar />
+      <main className="flex-1 md:ml-64 w-full">
         {children}
       </main>
 

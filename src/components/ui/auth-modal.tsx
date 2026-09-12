@@ -99,6 +99,7 @@ function AuthModal({
 
     try {
       setLoadingGoogle(true);
+      document.cookie = 'gymora_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       const supabase = createClient();
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       const { error } = await supabase.auth.signInWithOAuth({
@@ -109,10 +110,12 @@ function AuthModal({
       });
       if (error) {
         console.warn("Google OAuth fallback:", error.message);
-        router.push(mode === "signup" ? "/onboarding" : "/dashboard");
+        const hasGym = document.cookie.includes('gymora_gym_id=') && !document.cookie.includes('gymora_gym_id=gym-gymora-01');
+        window.location.href = mode === "signup" || !hasGym ? "/onboarding" : "/dashboard";
       }
     } catch {
-      router.push(mode === "signup" ? "/onboarding" : "/dashboard");
+      const hasGym = document.cookie.includes('gymora_gym_id=') && !document.cookie.includes('gymora_gym_id=gym-gymora-01');
+      window.location.href = mode === "signup" || !hasGym ? "/onboarding" : "/dashboard";
     } finally {
       setLoadingGoogle(false);
     }
@@ -121,12 +124,19 @@ function AuthModal({
   const handleEmailSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setIsLoading(true);
-    document.cookie = "gymora_session=true; path=/; max-age=2592000; SameSite=Lax";
+    document.cookie = 'gymora_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'gymora_session=true; path=/; max-age=2592000; SameSite=Lax';
+    document.cookie = `gymora_owner_email=${encodeURIComponent(email.trim())}; path=/; max-age=2592000; SameSite=Lax`;
 
     setTimeout(() => {
       setIsLoading(false);
-      router.push(mode === "signup" ? "/onboarding" : "/dashboard");
-    }, 400);
+      const hasGym = document.cookie.includes('gymora_gym_id=') && !document.cookie.includes('gymora_gym_id=gym-gymora-01');
+      if (mode === "signup" || !hasGym) {
+        window.location.href = "/onboarding";
+      } else {
+        window.location.href = "/dashboard";
+      }
+    }, 300);
   };
 
   const modalBody = (
@@ -216,19 +226,7 @@ function AuthModal({
         </form>
       </motion.div>
 
-      {/* Quick Demo Access */}
-      <motion.div variants={item} className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-900 text-center">
-        <button
-          type="button"
-          onClick={() => {
-            document.cookie = "gymora_session=true; path=/; max-age=2592000; SameSite=Lax";
-            router.push("/dashboard");
-          }}
-          className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
-        >
-          ⚡ Instant Demo Owner Sign-In
-        </button>
-      </motion.div>
+
 
       {/* Terms */}
       <motion.div variants={item} className="mt-4 text-center">

@@ -18,14 +18,23 @@ export async function GET(request: Request) {
         } = await supabase.auth.getUser();
 
         if (user) {
-          // Check if gym owner already has a gym assigned
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('gym_id')
-            .eq('id', user.id)
-            .maybeSingle();
+          // Check if gym owner already has a gym assigned (user_metadata or profiles table)
+          let hasGym = Boolean(user.user_metadata?.gym_id);
 
-          if (profile && profile.gym_id) {
+          if (!hasGym) {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('gym_id')
+                .eq('id', user.id)
+                .maybeSingle();
+              if (profile?.gym_id) {
+                hasGym = true;
+              }
+            } catch {}
+          }
+
+          if (hasGym) {
             // Returning gym owner with active gym -> send straight to Dashboard!
             targetUrl = `${origin}${next}`;
           } else {
@@ -40,12 +49,5 @@ export async function GET(request: Request) {
   }
 
   const response = NextResponse.redirect(targetUrl);
-  // Set session cookie for fast client/middleware synchronization
-  response.cookies.set('gymora_session', 'true', {
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-    sameSite: 'lax',
-  });
-
   return response;
 }

@@ -29,12 +29,46 @@ class GymStore {
   memberships: Membership[] = [...initialMemberships];
   payments: Payment[] = [...initialPayments];
   registrations: RegistrationRequest[] = [...initialRegistrations];
+  userGymMap: Map<string, string> = new Map();
+
+  setUserGym(userId: string, gymId: string) {
+    this.userGymMap.set(userId, gymId);
+  }
+
+  getUserGym(userId: string): string | undefined {
+    return this.userGymMap.get(userId);
+  }
 
   getGym(gymId?: string): Gym {
     if (gymId) {
       const found = this.gyms.find((g) => g.id === gymId);
       if (found) return found;
+      // Safe fallback if gymId exists but memory was reset
+      const fallbackGym: Gym = {
+        id: gymId,
+        name: 'My Fitness Gym',
+        slug: 'my-fitness-gym',
+        phone: '9876543210',
+        email: null,
+        address: null,
+        logo_url: null,
+        payment_mode: 'local_qr',
+        upi_id: null,
+        upi_qr_url: null,
+        gateway_provider: null,
+        gateway_key_id: null,
+        gateway_key_secret: null,
+        whatsapp_mode: 'local_click_to_chat',
+        fb_waba_id: null,
+        fb_phone_number_id: null,
+        fb_access_token: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.gyms.push(fallbackGym);
+      return fallbackGym;
     }
+    // Only return demo gym if no gymId is provided
     return this.gyms[0];
   }
 
@@ -219,7 +253,7 @@ class GymStore {
     d.setDate(d.getDate() + plan.duration_days);
     const endDate = d.toISOString().slice(0, 10);
 
-    const memberId = 'member-' + Date.now();
+    const memberId = crypto.randomUUID();
     const newMember: Member = {
       id: memberId,
       gym_id: gym.id,
@@ -232,7 +266,7 @@ class GymStore {
       updated_at: new Date().toISOString(),
     };
 
-    const mshipId = 'mship-' + Date.now();
+    const mshipId = crypto.randomUUID();
     const newMembership: Membership = {
       id: mshipId,
       gym_id: gym.id,
@@ -288,7 +322,7 @@ class GymStore {
       throw new Error(`Amount ₹${params.amount} exceeds outstanding balance of ₹${remaining}`);
     }
 
-    const paymentId = 'pay-' + Date.now();
+    const paymentId = crypto.randomUUID();
     const newPayment: Payment = {
       id: paymentId,
       gym_id: membership.gym_id,
@@ -347,7 +381,7 @@ class GymStore {
     }
 
     const newPlan: MembershipPlan = {
-      id: 'plan-' + Date.now(),
+      id: crypto.randomUUID(),
       gym_id: gym.id,
       name: plan.name,
       duration_days: plan.duration_days,
@@ -394,7 +428,7 @@ class GymStore {
     const plan = this.plans.find((p) => p.id === params.plan_id && p.gym_id === gym.id && p.is_active);
     if (!plan) throw new Error('Active plan not found for this gym');
 
-    const regId = 'reg-' + Date.now();
+    const regId = crypto.randomUUID();
     const cleanPhone = normalizePhone(params.phone);
 
     const newReg: RegistrationRequest = {
@@ -434,7 +468,7 @@ class GymStore {
     let member = this.members.find((m) => m.gym_id === reg.gym_id && m.phone === reg.phone);
     if (!member) {
       member = {
-        id: 'member-' + Date.now(),
+        id: crypto.randomUUID(),
         gym_id: reg.gym_id,
         full_name: reg.full_name,
         phone: reg.phone,
@@ -454,7 +488,7 @@ class GymStore {
     d.setDate(d.getDate() + duration);
     const end = d.toISOString().slice(0, 10);
 
-    const mshipId = 'mship-' + Date.now();
+    const mshipId = crypto.randomUUID();
     const membership: Membership = {
       id: mshipId,
       gym_id: reg.gym_id,
@@ -487,7 +521,7 @@ class GymStore {
     gym_slug: string;
     imported_count: number;
   } {
-    const gymId = 'gym-' + Date.now();
+    const gymId = crypto.randomUUID();
     const cleanSlug =
       (payload.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'gymora';
 
@@ -520,7 +554,7 @@ class GymStore {
     if (payload.plans && payload.plans.length > 0) {
       payload.plans.forEach((p) => {
         const plan: MembershipPlan = {
-          id: 'plan-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          id: crypto.randomUUID(),
           gym_id: gymId,
           name: p.name,
           duration_days: p.duration_days,
@@ -539,7 +573,7 @@ class GymStore {
     let importedCount = 0;
     if (payload.imported_members && payload.imported_members.length > 0) {
       payload.imported_members.forEach((m) => {
-        const memberId = 'member-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        const memberId = crypto.randomUUID();
         const member: Member = {
           id: memberId,
           gym_id: gymId,
@@ -557,7 +591,7 @@ class GymStore {
           createdPlans.find((cp) => cp.name.toLowerCase() === (m.plan_name || '').toLowerCase()) ||
           createdPlans[0];
 
-        const mshipId = 'mship-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        const mshipId = crypto.randomUUID();
         const membership: Membership = {
           id: mshipId,
           gym_id: gymId,

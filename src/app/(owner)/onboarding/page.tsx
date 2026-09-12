@@ -191,9 +191,12 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to finish onboarding');
       }
 
-      // Success -> Set cookie and redirect to Dashboard!
+      // Success -> Set cookies and navigate cleanly to Dashboard!
+      if (data.gym_id) {
+        document.cookie = `gymora_gym_id=${data.gym_id}; path=/; max-age=2592000; SameSite=Lax`;
+      }
       document.cookie = 'gymora_session=true; path=/; max-age=2592000; SameSite=Lax';
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err: any) {
       setError(err.message || 'Something went wrong during onboarding.');
       setIsSubmitting(false);

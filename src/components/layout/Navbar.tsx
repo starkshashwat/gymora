@@ -35,7 +35,9 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
       await supabase.auth.signOut();
     } catch {}
     document.cookie = 'gymora_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    router.push('/');
+    document.cookie = 'gymora_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'gymora_gym_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    window.location.href = '/';
   };
 
   const fetchPendingCount = async () => {
