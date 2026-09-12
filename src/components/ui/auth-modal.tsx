@@ -7,7 +7,7 @@ import { X, Mail, ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
-// Dummy icons for Google, Microsoft, Apple, Twitter, GitHub as specified
+// Google SVG Icon
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
     <path
@@ -26,36 +26,6 @@ const GoogleIcon = ({ className }: { className?: string }) => (
       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
       fill="#EA4335"
     />
-  </svg>
-);
-
-const MicrosoftIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 88 88" className={className}>
-    <path fill="#f35325" d="M0 0h42v42H0z" />
-    <path fill="#81bc06" d="M46 0h42v42H46z" />
-    <path fill="#05a6f0" d="M0 46h42v42H0z" />
-    <path fill="#ffba08" d="M46 46h42v42H46z" />
-  </svg>
-);
-
-const AppleIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
-  </svg>
-);
-
-const TwitterIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-    <path
-      d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"
-      fill="#1DA1F2"
-    />
-  </svg>
-);
-
-const GitHubIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
   </svg>
 );
 
@@ -93,7 +63,7 @@ function AuthModal({
   const [isOpen, setIsOpen] = React.useState(isInline);
   const [email, setEmail] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [loadingProvider, setLoadingProvider] = React.useState<string | null>(null);
+  const [loadingGoogle, setLoadingGoogle] = React.useState(false);
 
   const container: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
@@ -121,64 +91,30 @@ function AuthModal({
     show: { opacity: 1, y: 0 },
   };
 
-  const socialButtons = [
-    {
-      icon: GoogleIcon,
-      label: "Google",
-      color: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-    },
-    {
-      icon: AppleIcon,
-      label: "Apple",
-      color: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-    },
-    {
-      icon: MicrosoftIcon,
-      label: "Microsoft",
-      color: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-    },
-    {
-      icon: GitHubIcon,
-      label: "Github",
-      color: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-    },
-    {
-      icon: TwitterIcon,
-      label: "Twitter",
-      color: "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-    },
-  ];
-
-  const handleProviderLogin = async (provider: string) => {
+  const handleGoogleLogin = async () => {
     if (onLogin) {
-      onLogin(provider);
+      onLogin("Google");
       return;
     }
 
-    if (provider === "Google") {
-      try {
-        setLoadingProvider("Google");
-        const supabase = createClient();
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: `${origin}/auth/callback`,
-          },
-        });
-        if (error) {
-          console.warn("Google OAuth fallback:", error.message);
-          router.push(mode === "signup" ? "/onboarding" : "/dashboard");
-        }
-      } catch {
+    try {
+      setLoadingGoogle(true);
+      const supabase = createClient();
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        console.warn("Google OAuth fallback:", error.message);
         router.push(mode === "signup" ? "/onboarding" : "/dashboard");
-      } finally {
-        setLoadingProvider(null);
       }
-    } else {
-      // Direct demo sign in for other social providers
-      document.cookie = "gymora_session=true; path=/; max-age=2592000; SameSite=Lax";
+    } catch {
       router.push(mode === "signup" ? "/onboarding" : "/dashboard");
+    } finally {
+      setLoadingGoogle(false);
     }
   };
 
@@ -199,7 +135,7 @@ function AuthModal({
       initial="hidden"
       animate="show"
       exit="exit"
-      className="relative w-full max-w-[380px] overflow-hidden rounded-3xl bg-white p-6 sm:p-7 shadow-2xl dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 ring-1 ring-zinc-950/5"
+      className="relative w-full max-w-[380px] overflow-hidden rounded-3xl bg-white p-6 sm:p-8 shadow-2xl dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 ring-1 ring-zinc-950/5 text-left"
     >
       {!isInline && (
         <div className="absolute right-4 top-4">
@@ -212,7 +148,8 @@ function AuthModal({
         </div>
       )}
 
-      <motion.div variants={item} className="mb-7 text-center">
+      {/* Header */}
+      <motion.div variants={item} className="mb-6 text-center">
         <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
           {mode === "signup" ? "Create Gym Account" : "Welcome back"}
         </h2>
@@ -223,57 +160,52 @@ function AuthModal({
         </p>
       </motion.div>
 
-      <motion.div
-        variants={item}
-        className="grid grid-cols-5 gap-2.5 mb-7"
-      >
-        {socialButtons.map((btn, i) => (
-          <button
-            key={i}
-            type="button"
-            disabled={loadingProvider !== null}
-            onClick={() => handleProviderLogin(btn.label)}
-            className={cn(
-              "flex aspect-square items-center justify-center rounded-2xl border border-zinc-200 bg-white transition-all hover:scale-105 active:scale-95 dark:border-zinc-800 dark:bg-zinc-950 shadow-sm",
-              btn.color,
-            )}
-            aria-label={`Sign in with ${btn.label}`}
-          >
-            {loadingProvider === btn.label ? (
-              <Loader2 className="h-4 w-4 animate-spin text-zinc-600" />
-            ) : (
-              <btn.icon className="h-5 w-5" />
-            )}
-          </button>
-        ))}
+      {/* 1. Only Google Button (prominent & clean) */}
+      <motion.div variants={item}>
+        <button
+          type="button"
+          disabled={loadingGoogle}
+          onClick={handleGoogleLogin}
+          className="flex w-full items-center justify-center gap-3 rounded-full border border-zinc-200 bg-white py-3 px-4 text-sm font-semibold text-zinc-800 shadow-sm transition hover:bg-zinc-50 active:scale-[0.98] disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          {loadingGoogle ? (
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-600 dark:text-zinc-400" />
+          ) : (
+            <GoogleIcon className="h-5 w-5 shrink-0" />
+          )}
+          <span>Continue with Google</span>
+        </button>
       </motion.div>
 
-      <motion.div variants={item} className="relative mb-7">
+      {/* 2. Divider */}
+      <motion.div variants={item} className="relative my-6">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-zinc-200 dark:border-zinc-800" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-zinc-400 dark:bg-zinc-950 font-medium tracking-wider">
+          <span className="bg-white px-3 text-zinc-400 dark:bg-zinc-950 font-medium tracking-wider">
             Or continue with email
           </span>
         </div>
       </motion.div>
 
+      {/* 3. Continue with your email */}
       <motion.div variants={item}>
         <form onSubmit={handleEmailSubmit} className="relative">
-          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="owner@gymora.fit"
-            className="h-11 w-full rounded-full border border-zinc-200 bg-zinc-50 pl-10 pr-12 text-sm outline-none transition-all focus:border-zinc-900 focus:bg-white focus:ring-1 focus:ring-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/50 dark:focus:border-zinc-100 dark:focus:bg-zinc-900"
+            className="h-11 w-full rounded-full border border-zinc-200 bg-zinc-50 pl-11 pr-12 text-sm outline-none transition-all focus:border-zinc-900 focus:bg-white focus:ring-1 focus:ring-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/50 dark:focus:border-zinc-100 dark:focus:bg-zinc-900 text-zinc-900 dark:text-zinc-50"
           />
           <button
             type="submit"
             disabled={isLoading}
             className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full h-8 w-8 flex items-center justify-center bg-zinc-900 text-zinc-50 transition-transform hover:scale-95 active:scale-90 dark:bg-zinc-50 dark:text-zinc-900 shadow-sm"
+            title="Continue with email"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -284,8 +216,23 @@ function AuthModal({
         </form>
       </motion.div>
 
-      <motion.div variants={item} className="mt-7 text-center">
-        <p className="text-xs text-zinc-400 leading-relaxed">
+      {/* Quick Demo Access */}
+      <motion.div variants={item} className="mt-5 pt-4 border-t border-zinc-100 dark:border-zinc-900 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            document.cookie = "gymora_session=true; path=/; max-age=2592000; SameSite=Lax";
+            router.push("/dashboard");
+          }}
+          className="text-xs font-semibold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
+        >
+          ⚡ Instant Demo Owner Sign-In
+        </button>
+      </motion.div>
+
+      {/* Terms */}
+      <motion.div variants={item} className="mt-4 text-center">
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
           By clicking continue, you agree to our{" "}
           <a
             href="#"
