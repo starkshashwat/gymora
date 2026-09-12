@@ -43,7 +43,7 @@ CREATE OR REPLACE FUNCTION public.record_payment(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $body
+AS $$
 DECLARE
   v_membership record;
   v_total_paid numeric;
@@ -117,7 +117,7 @@ BEGIN
     'new_outstanding', v_membership.amount_due - v_total_paid
   );
 END;
-$body;
+$$;
 
 
 -- ==============================================================================
@@ -134,7 +134,7 @@ CREATE OR REPLACE FUNCTION public.renew_membership(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $body
+AS $$
 DECLARE
   v_plan record;
   v_member record;
@@ -203,7 +203,7 @@ BEGIN
     'payment_id', v_payment_id
   );
 END;
-$body;
+$$;
 
 -- ==============================================================================
 -- 6. ATOMIC REGISTRATION CONVERSION RPC
@@ -218,7 +218,7 @@ CREATE OR REPLACE FUNCTION public.convert_registration(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $body
+AS $$
 DECLARE
   v_reg record;
   v_member_id uuid;
@@ -302,25 +302,25 @@ BEGIN
     'payment_id', v_payment_id
   );
 END;
-$body;
+$$;
 
 
 -- ==============================================================================
 -- 7. PAYMENT RLS & IMMUTABILITY
 -- ==============================================================================
 -- Drop existing update/delete policies for payments (normal owners should not be able to modify historical financial data)
-DROP POLICY IF EXISTS ""Owners can update payments"" ON public.payments;
-DROP POLICY IF EXISTS ""Owners can delete payments"" ON public.payments;
+DROP POLICY IF EXISTS "Owners can update payments" ON public.payments;
+DROP POLICY IF EXISTS "Owners can delete payments" ON public.payments;
 
 -- Ensure INSERT is only allowed if the gym matches the current user's profile gym
-DROP POLICY IF EXISTS ""Owners can insert payments"" ON public.payments;
-CREATE POLICY ""Owners can insert payments""
+DROP POLICY IF EXISTS "Owners can insert payments" ON public.payments;
+CREATE POLICY "Owners can insert payments"
   ON public.payments FOR INSERT
   WITH CHECK ( gym_id = public.current_user_gym_id() );
 
 -- Ensure SELECT is only allowed if the gym matches the current user's profile gym
-DROP POLICY IF EXISTS ""Owners can view payments"" ON public.payments;
-CREATE POLICY ""Owners can view payments""
+DROP POLICY IF EXISTS "Owners can view payments" ON public.payments;
+CREATE POLICY "Owners can view payments"
   ON public.payments FOR SELECT
   USING ( gym_id = public.current_user_gym_id() );
 
@@ -332,14 +332,14 @@ CREATE POLICY ""Owners can view payments""
 CREATE OR REPLACE FUNCTION public.prevent_profile_gym_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $body
+AS $$
 BEGIN
   IF OLD.gym_id IS NOT NULL AND NEW.gym_id != OLD.gym_id THEN
     RAISE EXCEPTION 'Cannot change gym assignment once set. Contact support.';
   END IF;
   RETURN NEW;
 END;
-$body;
+$$;
 
 DROP TRIGGER IF EXISTS prevent_profile_gym_mutation_trigger ON public.profiles;
 CREATE TRIGGER prevent_profile_gym_mutation_trigger
@@ -355,7 +355,7 @@ CREATE OR REPLACE FUNCTION public.get_dashboard_metrics(p_gym_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $body
+AS $$
 DECLARE
   v_active_members int;
   v_today_collection numeric;
@@ -423,7 +423,7 @@ BEGIN
     'overdueAmount', v_overdue_amount
   );
 END;
-$body;
+$$;
 
 
 -- ==============================================================================
@@ -461,7 +461,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $body
+AS $$
 DECLARE
   v_gym_id uuid;
   v_plan record;
@@ -504,7 +504,7 @@ BEGIN
     'message', 'Registration submitted successfully'
   );
 END;
-$body;
+$$;
 
 GRANT EXECUTE ON FUNCTION public.create_registration_request(text, text, text, text, uuid) TO anon, authenticated;
 
