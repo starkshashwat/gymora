@@ -4,6 +4,14 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Gymora — Gym Payment CRM',
   description: 'Fast, mobile-first gym payment management, dues tracking, WhatsApp reminders & QR onboarding.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Gymora',
+  },
+  formatDetection: {
+    telephone: true,
+  },
 };
 
 export const viewport: Viewport = {
@@ -11,6 +19,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
 };
 
 export default function RootLayout({

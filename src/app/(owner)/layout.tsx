@@ -49,7 +49,7 @@ export default function OwnerLayout({
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 flex flex-col md:flex-row selection:bg-zinc-900 selection:text-white">
       <Sidebar />
-      <main className="flex-1 md:ml-64 w-full">
+      <main className="flex-1 md:ml-64 w-full min-w-0 pb-28 md:pb-8 overflow-x-hidden">
         {children}
       </main>
 

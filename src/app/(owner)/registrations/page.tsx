@@ -60,7 +60,7 @@ export default function RegistrationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 space-y-6 pb-24 md:pb-12">
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-top-4">
           <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
@@ -158,7 +158,15 @@ export default function RegistrationsPage() {
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center gap-3">
+                <div className="shrink-0 flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                  <a
+                    href={`tel:${reg.phone}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                    title={`Call ${reg.full_name}`}
+                  >
+                    <Phone className="h-4 w-4 text-emerald-600" />
+                  </a>
+
                   {reg.status === 'converted' ? (
                     <Link
                       href="/members"
@@ -169,7 +177,7 @@ export default function RegistrationsPage() {
                   ) : (
                     <button
                       onClick={() => handleOpenReview(reg)}
-                      className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition"
                     >
                       <UserCheck className="h-4 w-4" />
                       <span>Review & Approve</span>

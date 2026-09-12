@@ -28,6 +28,11 @@ import {
   RefreshCw,
   Clock,
   CheckCircle2,
+  QrCode,
+  Layers,
+  MessageCircle,
+  CheckCircle,
+  RotateCw,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -234,24 +239,59 @@ export default function DashboardPage() {
       )}
 
       {/* Header Area */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Good morning
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-3">
           <button 
             onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 shadow-sm"
           >
             <Plus className="h-4 w-4" />
             Add Member
           </button>
         </div>
+      </div>
+
+      {/* Mobile Quick Action Strip */}
+      <div className="flex sm:hidden items-center gap-2 overflow-x-auto no-scrollbar pb-1 -mt-1">
+        <button
+          onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white shadow-sm active:scale-95 transition dark:bg-white dark:text-zinc-900 shrink-0"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span>New Member</span>
+        </button>
+
+        <Link
+          href="/qr"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 shadow-sm active:scale-95 transition shrink-0"
+        >
+          <QrCode className="h-3.5 w-3.5 text-zinc-600 dark:text-zinc-400" />
+          <span>Gym QR</span>
+        </Link>
+
+        <Link
+          href="/registrations"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-bold text-amber-800 dark:text-amber-300 shadow-sm active:scale-95 transition shrink-0"
+        >
+          <UserCheck className="h-3.5 w-3.5 text-amber-600" />
+          <span>Signups ({pendingRegistrations.length})</span>
+        </Link>
+
+        <Link
+          href="/plans"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 shadow-sm active:scale-95 transition shrink-0"
+        >
+          <Layers className="h-3.5 w-3.5 text-zinc-500" />
+          <span>Plans</span>
+        </Link>
       </div>
       
       {/* Pending Registrations Alert */}
@@ -324,24 +364,24 @@ export default function DashboardPage() {
         </div>
 
         {/* Secondary KPIs: Due Today, Overdue, Expiring Soon, Active Members */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-y border-zinc-200 dark:border-zinc-800">
-          <div>
-            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Due Today</div>
-            <div className="text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100">{formatINR(metrics?.due_today_amount)}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 py-1 sm:py-2">
+          <div className="rounded-xl p-3 sm:p-4 bg-zinc-50/70 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-0.5">Due Today</div>
+            <div className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">{formatINR(metrics?.due_today_amount)}</div>
           </div>
-          <div>
-            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Overdue</div>
-            <div className="text-base sm:text-lg font-medium text-rose-600 dark:text-rose-400">{formatINR(metrics?.overdue_amount)}</div>
+          <div className="rounded-xl p-3 sm:p-4 bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/50 dark:border-rose-900/30">
+            <div className="text-[10px] font-bold tracking-wider text-rose-600 dark:text-rose-400 uppercase mb-0.5">Overdue</div>
+            <div className="text-base sm:text-lg font-bold text-rose-600 dark:text-rose-400">{formatINR(metrics?.overdue_amount)}</div>
           </div>
-          <div>
-            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Expiring (7d)</div>
-            <div className="text-base sm:text-lg font-medium text-amber-600 dark:text-amber-400">
-              {metrics?.expiring_soon_count || expiringSoon.length || 0} members
+          <div className="rounded-xl p-3 sm:p-4 bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30">
+            <div className="text-[10px] font-bold tracking-wider text-amber-600 dark:text-amber-400 uppercase mb-0.5">Expiring (7d)</div>
+            <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">
+              {metrics?.expiring_soon_count || expiringSoon.length || 0} <span className="text-xs font-normal text-zinc-500">members</span>
             </div>
           </div>
-          <div>
-            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Active Members</div>
-            <div className="text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100">{metrics?.active_members || 0}</div>
+          <div className="rounded-xl p-3 sm:p-4 bg-zinc-50/70 dark:bg-zinc-900/50 border border-zinc-200/60 dark:border-zinc-800/60">
+            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-0.5">Active Members</div>
+            <div className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-100">{metrics?.active_members || 0}</div>
           </div>
         </div>
       </div>
@@ -370,7 +410,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Sub-filter chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold text-zinc-600 dark:text-zinc-400 pt-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px] font-bold text-zinc-600 dark:text-zinc-400 pt-1">
               {[
                 { id: 'all', label: 'All Due' },
                 { id: 'due', label: 'Due Today' },
@@ -395,10 +435,10 @@ export default function DashboardPage() {
 
           {attentionList.length === 0 ? (
             <div className="py-8 text-sm text-zinc-500">
-              You're all clear. No members match the current attention filter.
+              You&apos;re all clear. No members match the current attention filter.
             </div>
           ) : (
-            <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+            <div className="space-y-3 md:space-y-0 md:divide-y md:divide-zinc-100 dark:md:divide-zinc-800/50">
               {attentionList.map((m) => {
                 const isOverdue = m.attentionType === 'overdue';
                 const isExpiring = m.attentionType === 'expiring';
@@ -410,66 +450,143 @@ export default function DashboardPage() {
                 });
 
                 return (
-                  <div key={m.id} className="py-3 flex items-center justify-between gap-3 group">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/members/${m.id}`} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:underline truncate">
-                          {m.full_name}
-                        </Link>
-                        <span className="text-xs text-zinc-500 shrink-0">• {formatINR(m.membership?.outstanding_balance || 0)}</span>
+                  <React.Fragment key={m.id}>
+                    {/* MOBILE CARD (< md) */}
+                    <div className="block md:hidden p-3.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 space-y-3 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Link href={`/members/${m.id}`} className="font-bold text-sm text-zinc-900 dark:text-zinc-100 hover:underline truncate block">
+                            {m.full_name}
+                          </Link>
+                          <div className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                            <span>{m.phone}</span> • <span>{m.membership?.plan_name_snapshot || 'Plan'}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                            {formatINR(m.membership?.outstanding_balance || 0)}
+                          </div>
+                          <div className="mt-0.5">
+                            {isOverdue ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">
+                                {m.membership?.days_overdue}d overdue
+                              </span>
+                            ) : isExpiring ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
+                                Exp: {formatDisplayDate(m.membership?.end_date)}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
+                                Due today
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs mt-0.5">
-                        {isOverdue ? (
-                          <span className="text-rose-600 dark:text-rose-400 font-medium">{m.membership?.days_overdue} days overdue</span>
-                        ) : isExpiring ? (
-                          <span className="text-amber-600 dark:text-amber-500 font-medium">Expires {formatDisplayDate(m.membership?.end_date)}</span>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-500 font-medium">Due today</span>
-                        )}
-                        <span className="text-zinc-400 ml-2">({m.membership?.plan_name_snapshot})</span>
+
+                      {/* 4 Balanced Touch Buttons */}
+                      <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                        <a
+                          href={`tel:${m.phone}`}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 active:scale-95 transition shadow-2xs"
+                        >
+                          <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-[10px] font-bold mt-0.5">Call</span>
+                        </a>
+
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center py-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 active:scale-95 transition shadow-2xs"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-[10px] font-bold mt-0.5">WhatsApp</span>
+                        </a>
+
+                        <button
+                          onClick={() => {
+                            setSelectedMemberForRenew(m as MemberWithDetails);
+                            setIsRenewModalOpen(true);
+                          }}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 active:scale-95 transition shadow-2xs"
+                        >
+                          <RotateCw className="h-3.5 w-3.5 text-blue-600" />
+                          <span className="text-[10px] font-bold mt-0.5">Renew</span>
+                        </button>
+
+                        <button
+                          onClick={() => { setSelectedMember(m as MemberWithDetails); setIsMarkPaidOpen(true); }}
+                          className="flex flex-col items-center justify-center py-2 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 active:scale-95 transition shadow-sm"
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          <span className="text-[10px] font-bold mt-0.5">Paid</span>
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* 1-Tap Call */}
-                      <a
-                        href={`tel:${m.phone}`}
-                        title={`Call ${m.full_name}`}
-                        className="h-7 w-7 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                      >
-                        <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      </a>
+                    {/* DESKTOP ROW (>= md) */}
+                    <div className="hidden md:flex py-3 items-center justify-between gap-3 group">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Link href={`/members/${m.id}`} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:underline truncate">
+                            {m.full_name}
+                          </Link>
+                          <span className="text-xs text-zinc-500 shrink-0">• {formatINR(m.membership?.outstanding_balance || 0)}</span>
+                        </div>
+                        <div className="text-xs mt-0.5">
+                          {isOverdue ? (
+                            <span className="text-rose-600 dark:text-rose-400 font-medium">{m.membership?.days_overdue} days overdue</span>
+                          ) : isExpiring ? (
+                            <span className="text-amber-600 dark:text-amber-500 font-medium">Expires {formatDisplayDate(m.membership?.end_date)}</span>
+                          ) : (
+                            <span className="text-amber-600 dark:text-amber-500 font-medium">Due today</span>
+                          )}
+                          <span className="text-zinc-400 ml-2">({m.membership?.plan_name_snapshot})</span>
+                        </div>
+                      </div>
 
-                      {/* WhatsApp Reminder */}
-                      <a
-                        href={waUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-                      >
-                        WhatsApp
-                      </a>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* 1-Tap Call */}
+                        <a
+                          href={`tel:${m.phone}`}
+                          title={`Call ${m.full_name}`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                        >
+                          <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        </a>
 
-                      {/* Renew Button */}
-                      <button
-                        onClick={() => {
-                          setSelectedMemberForRenew(m as MemberWithDetails);
-                          setIsRenewModalOpen(true);
-                        }}
-                        className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors"
-                      >
-                        Renew
-                      </button>
+                        {/* WhatsApp Reminder */}
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                        >
+                          WhatsApp
+                        </a>
 
-                      {/* Mark Paid Button */}
-                      <button
-                        onClick={() => { setSelectedMember(m as MemberWithDetails); setIsMarkPaidOpen(true); }}
-                        className="h-7 px-2.5 inline-flex items-center justify-center rounded bg-zinc-900 dark:bg-white text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
-                      >
-                        Mark Paid
-                      </button>
+                        {/* Renew Button */}
+                        <button
+                          onClick={() => {
+                            setSelectedMemberForRenew(m as MemberWithDetails);
+                            setIsRenewModalOpen(true);
+                          }}
+                          className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors"
+                        >
+                          Renew
+                        </button>
+
+                        {/* Mark Paid Button */}
+                        <button
+                          onClick={() => { setSelectedMember(m as MemberWithDetails); setIsMarkPaidOpen(true); }}
+                          className="h-7 px-2.5 inline-flex items-center justify-center rounded bg-zinc-900 dark:bg-white text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+                        >
+                          Mark Paid
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
             </div>

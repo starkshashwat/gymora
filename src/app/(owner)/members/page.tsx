@@ -307,7 +307,7 @@ export default function MembersPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6 pb-12">
+    <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 space-y-6 pb-24 md:pb-12">
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-zinc-700 animate-in fade-in slide-in-from-top-4 max-w-md">
           <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
@@ -329,7 +329,7 @@ export default function MembersPage() {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => handleExportExcel('all')}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-95 transition"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-95 transition"
             title="Export members list to Excel"
           >
             <Download className="h-4 w-4 text-emerald-600" />
@@ -338,7 +338,7 @@ export default function MembersPage() {
 
           <button
             onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-zinc-800 active:scale-95 transition dark:bg-white dark:text-zinc-900"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-zinc-800 active:scale-95 transition dark:bg-white dark:text-zinc-900"
           >
             <UserPlus className="h-4 w-4" />
             <span>Add Member</span>
@@ -361,7 +361,7 @@ export default function MembersPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto">
+        <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto no-scrollbar">
           {(['all', 'due', 'overdue', 'expiring_soon', 'paid', 'paused', 'cancelled'] as const).map((tab) => (
             <button
               key={tab}

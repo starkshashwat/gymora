@@ -16,6 +16,7 @@ import {
   LogOut,
   Bell,
   Settings as SettingsIcon,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -223,19 +224,30 @@ export default function Sidebar() {
             {gymInfo.name}
           </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <Link
+            href="/qr"
+            className="p-2 rounded-xl text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900 transition"
+            title="Gym QR Code"
+            aria-label="Gym QR Code"
+          >
+            <QrCode className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
+          </Link>
+
           {pendingCount > 0 && (
             <Link
               href="/registrations"
-              className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600"
+              className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-bold text-amber-600"
             >
               <Bell className="h-3 w-3 animate-bounce" />
               <span>{pendingCount}</span>
             </Link>
           )}
+
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-1.5 text-zinc-600 dark:text-zinc-400"
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -299,10 +311,95 @@ export default function Sidebar() {
     </header>
   );
 
+  const MobileBottomNav = (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-200 dark:border-zinc-800 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-lg">
+      <div className="flex h-16 items-center justify-around px-1 relative">
+        {/* 1. Dashboard */}
+        <Link
+          href="/dashboard"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 py-1 transition-colors",
+            pathname === '/dashboard'
+              ? "text-zinc-900 dark:text-white font-bold"
+              : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+          )}
+        >
+          <LayoutDashboard className={cn("h-5 w-5 mb-0.5", pathname === '/dashboard' ? "stroke-[2.5]" : "stroke-[1.75]")} />
+          <span className="text-[10px] tracking-tight">Overview</span>
+        </Link>
+
+        {/* 2. Members */}
+        <Link
+          href="/members"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 py-1 transition-colors",
+            pathname.startsWith('/members')
+              ? "text-zinc-900 dark:text-white font-bold"
+              : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+          )}
+        >
+          <Users className={cn("h-5 w-5 mb-0.5", pathname.startsWith('/members') ? "stroke-[2.5]" : "stroke-[1.75]")} />
+          <span className="text-[10px] tracking-tight">Members</span>
+        </Link>
+
+        {/* 3. Center Elevated FAB: Add Member */}
+        <div className="flex flex-col items-center justify-center px-1 -translate-y-3 shrink-0">
+          <button
+            onClick={() => {
+              window.dispatchEvent(new Event('gym:open-add-member'));
+            }}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 text-white shadow-xl ring-4 ring-white dark:ring-zinc-950 hover:scale-105 active:scale-95 transition dark:bg-white dark:text-zinc-900"
+            title="Add Member"
+            aria-label="Add Member"
+          >
+            <Plus className="h-6 w-6 stroke-[2.5]" />
+          </button>
+          <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-400 mt-1">Add</span>
+        </div>
+
+        {/* 4. Registrations */}
+        <Link
+          href="/registrations"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 py-1 relative transition-colors",
+            pathname.startsWith('/registrations')
+              ? "text-zinc-900 dark:text-white font-bold"
+              : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+          )}
+        >
+          <div className="relative">
+            <UserCheck className={cn("h-5 w-5 mb-0.5", pathname.startsWith('/registrations') ? "stroke-[2.5]" : "stroke-[1.75]")} />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1.5 -right-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-extrabold text-white animate-pulse shadow-sm">
+                {pendingCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] tracking-tight">Signups</span>
+        </Link>
+
+        {/* 5. Settings */}
+        <Link
+          href="/settings"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 py-1 transition-colors",
+            pathname.startsWith('/settings')
+              ? "text-zinc-900 dark:text-white font-bold"
+              : "text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+          )}
+        >
+          <SettingsIcon className={cn("h-5 w-5 mb-0.5", pathname.startsWith('/settings') ? "stroke-[2.5]" : "stroke-[1.75]")} />
+          <span className="text-[10px] tracking-tight">Settings</span>
+        </Link>
+      </div>
+    </nav>
+  );
+
   return (
     <>
       {DesktopSidebar}
       {MobileHeader}
+      {MobileBottomNav}
     </>
   );
 }
