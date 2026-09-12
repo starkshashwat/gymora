@@ -93,6 +93,20 @@ class GymStore {
     );
   }
 
+  getGymBySlug(slug: string): Gym | null {
+    if (!slug) return null;
+    const clean = slug.split(':')[0].toLowerCase().trim();
+    return (
+      this.gyms.find(
+        (g) =>
+          g.slug.toLowerCase() === clean ||
+          (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean) ||
+          (clean === 'iron-pulse' && g.slug === 'gymora') ||
+          (clean === 'gymora' && g.slug === 'iron-pulse')
+      ) || null
+    );
+  }
+
   getPublicGymBySlug(slug: string): { gym: Gym; plans: MembershipPlan[] } | null {
     const clean = slug.split(':')[0].toLowerCase().trim();
     const gym = this.gyms.find(
@@ -534,16 +548,28 @@ class GymStore {
     whatsapp_opt_in?: boolean;
   }): { success: boolean; registration_id: string; gym_name: string; plan_name: string; price: number } {
     const cleanSlug = params.gym_slug.toLowerCase().trim();
-    const gym = this.gyms.find(
-      (g) =>
-        g.slug.toLowerCase() === cleanSlug ||
-        (g.custom_domain && g.custom_domain.toLowerCase().trim() === cleanSlug) ||
-        (cleanSlug === 'iron-pulse' && g.slug === 'gymora') ||
-        (cleanSlug === 'gymora' && g.slug === 'iron-pulse')
-    );
+    // 1. Exact slug match
+    let gym = this.gyms.find((g) => g.slug.toLowerCase() === cleanSlug);
+    // 2. Custom domain match
+    if (!gym) {
+      gym = this.gyms.find((g) => g.custom_domain && g.custom_domain.toLowerCase().trim() === cleanSlug);
+    }
+    // 3. Demo alias fallback
+    if (!gym) {
+      gym = this.gyms.find(
+        (g) =>
+          (cleanSlug === 'iron-pulse' && g.slug === 'gymora') ||
+          (cleanSlug === 'gymora' && g.slug === 'iron-pulse')
+      );
+    }
     if (!gym) throw new Error('Gym not found for slug or domain ' + params.gym_slug);
 
-    const plan = this.plans.find((p) => p.id === params.plan_id && p.gym_id === gym.id && p.is_active);
+    let plan = this.plans.find((p) => p.id === params.plan_id && p.gym_id === gym!.id && p.is_active);
+    if (!plan) {
+      // Fallback: match by ID or select first active plan of gym
+      plan = this.plans.find((p) => p.id === params.plan_id && p.is_active) ||
+             this.plans.find((p) => p.gym_id === gym!.id && p.is_active);
+    }
     if (!plan) throw new Error('Active plan not found for this gym');
 
     const regId = crypto.randomUUID();
@@ -1200,23 +1226,39 @@ class GymStore {
 
     // Create plans
     const createdPlans: MembershipPlan[] = [];
-    if (payload.plans && payload.plans.length > 0) {
-      payload.plans.forEach((p) => {
-        const plan: MembershipPlan = {
-          id: crypto.randomUUID(),
-          gym_id: gymId,
-          name: p.name,
-          duration_days: p.duration_days,
-          price: p.price,
-          description: p.description || null,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        this.plans.unshift(plan);
-        createdPlans.push(plan);
-      });
-    }
+    const plansToCreate =
+      payload.plans && payload.plans.length > 0
+        ? payload.plans
+        : [
+            {
+              name: 'Monthly Standard',
+              duration_days: 30,
+              price: 1500,
+              description: 'Full gym access + locker room',
+            },
+            {
+              name: 'Quarterly Pro',
+              duration_days: 90,
+              price: 4000,
+              description: 'Full gym access + consultation',
+            },
+          ];
+
+    plansToCreate.forEach((p) => {
+      const plan: MembershipPlan = {
+        id: crypto.randomUUID(),
+        gym_id: gymId,
+        name: p.name,
+        duration_days: p.duration_days,
+        price: p.price,
+        description: p.description || null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.plans.unshift(plan);
+      createdPlans.push(plan);
+    });
 
     // Import members if provided
     let importedCount = 0;

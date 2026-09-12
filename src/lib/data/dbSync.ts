@@ -2,11 +2,13 @@ import { NextRequest } from 'next/server';
 import { gymService } from './service';
 import { initialGym } from './mockDb';
 import { MemberWithDetails, PaymentMethod } from '../types/database';
+import { getSubdomain, isCustomDomain } from '../utils/domain';
 
 export interface AuthContext {
   gymId?: string;
   isDemoMode: boolean;
   user: any | null;
+  isCrossTenantForbidden?: boolean;
 }
 
 /**
@@ -64,16 +66,38 @@ export async function resolveCurrentGym(
     }
   }
 
-  // 4. Fallback to active gym cookie for owner sessions
-  if (!gymId && gymCookie && gymCookie !== initialGym.id) {
+  // 4. Fallback to active gym cookie for owner sessions ONLY if session cookie is present
+  if (!gymId && sessionCookie && gymCookie && gymCookie !== initialGym.id) {
     gymId = gymCookie;
   }
 
-  // If user is authenticated or has session but hasn't created a gym yet
+  // 5. Cross-Tenant Subdomain & Domain Hijack Protection:
+  // Prevent an authenticated user of Gym A from accessing Gym B by changing subdomain or host header
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
+  const subdomain = getSubdomain(host);
+  const isCustom = isCustomDomain(host);
+
+  if ((subdomain || isCustom) && gymId && !isDemoMode) {
+    const targetSlugOrDomain = subdomain || host.split(':')[0].toLowerCase();
+    const targetGym =
+      gymService.getGymBySlug(targetSlugOrDomain) ||
+      gymService.getGymByCustomDomain(targetSlugOrDomain);
+
+    if (targetGym && targetGym.id !== gymId) {
+      return {
+        gymId: undefined,
+        isDemoMode: false,
+        user,
+        isCrossTenantForbidden: true,
+      };
+    }
+  }
+
   return {
     gymId,
     isDemoMode: false,
     user,
+    isCrossTenantForbidden: false,
   };
 }
 

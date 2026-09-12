@@ -6,13 +6,38 @@ import { resolveCurrentGym, approveRegistrationInDatabase } from '@/lib/data/dbS
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
-    const { gymId, isDemoMode } = await resolveCurrentGym(request, supabase);
+    const { gymId, isDemoMode, isCrossTenantForbidden } = await resolveCurrentGym(request, supabase);
+
+    if (isCrossTenantForbidden) {
+      return NextResponse.json(
+        { success: false, error: 'Access Denied: You do not have permission to access this gym.' },
+        { status: 403 }
+      );
+    }
 
     if (!gymId && !isDemoMode) {
       return NextResponse.json({ success: true, registrations: [] });
     }
 
-    const registrations = gymService.getRegistrations(gymId);
+    let registrations = gymService.getRegistrations(gymId);
+
+    // Query Supabase for latest registrations across devices
+    if (gymId && !isDemoMode) {
+      try {
+        const { data: dbRegs } = await supabase
+          .from('registration_requests')
+          .select('*')
+          .eq('gym_id', gymId)
+          .order('created_at', { ascending: false });
+
+        if (dbRegs && dbRegs.length > 0) {
+          registrations = dbRegs;
+        }
+      } catch (dbErr) {
+        console.warn('Supabase getRegistrations query error:', dbErr);
+      }
+    }
+
     return NextResponse.json({ success: true, isDemoMode, registrations });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -22,7 +47,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
-    const { gymId, user } = await resolveCurrentGym(request, supabase);
+    const { gymId, user, isCrossTenantForbidden } = await resolveCurrentGym(request, supabase);
+
+    if (isCrossTenantForbidden) {
+      return NextResponse.json(
+        { success: false, error: 'Access Denied: You do not have permission to access this gym.' },
+        { status: 403 }
+      );
+    }
 
     if (!gymId) {
       return NextResponse.json(

@@ -25,6 +25,7 @@ import {
   Palette,
   ShieldCheck,
 } from 'lucide-react';
+import LogoUploader from '@/components/ui/LogoUploader';
 
 type SettingsTab = 'general' | 'domain' | 'payments' | 'whatsapp' | 'reminders' | 'rules';
 
@@ -418,15 +419,11 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Logo URL
-              </label>
-              <input
-                type="url"
+              <LogoUploader
                 value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                onChange={setLogoUrl}
+                label="Gym Logo"
+                description="Upload new gym logo (PNG, JPG, SVG, WebP up to 3MB) or paste URL"
               />
             </div>
           </div>
@@ -734,6 +731,15 @@ export default function SettingsPage() {
                 >
                   Live Button Preview
                 </div>
+              </div>
+
+              <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-4">
+                <LogoUploader
+                  value={logoUrl}
+                  onChange={setLogoUrl}
+                  label="Gym Brand Logo"
+                  description="Displays on your custom domain header, member receipts, and join portal"
+                />
               </div>
             </div>
           </div>

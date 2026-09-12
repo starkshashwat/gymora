@@ -6,7 +6,10 @@ import { resolveCurrentGym, saveMemberToDatabase } from '@/lib/data/dbSync';
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
-    const { gymId, isDemoMode } = await resolveCurrentGym(request, supabase);
+    const { gymId, isDemoMode, isCrossTenantForbidden } = await resolveCurrentGym(request, supabase);
+    if (isCrossTenantForbidden) {
+      return NextResponse.json({ success: false, error: 'Access Denied: You do not have permission to access this gym.' }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
@@ -26,7 +29,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
-    const { gymId, user } = await resolveCurrentGym(request, supabase);
+    const { gymId, user, isCrossTenantForbidden } = await resolveCurrentGym(request, supabase);
+
+    if (isCrossTenantForbidden) {
+      return NextResponse.json(
+        { success: false, error: 'Access Denied: You do not have permission to access this gym.' },
+        { status: 403 }
+      );
+    }
 
     if (!gymId) {
       return NextResponse.json(

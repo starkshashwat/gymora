@@ -14,6 +14,7 @@ import { formatDisplayDate } from '@/lib/utils/date';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
 import ReviewRegistrationModal from '@/components/registrations/ReviewRegistrationModal';
 import RenewPlanModal from '@/components/members/RenewPlanModal';
+import { createClient } from '@/lib/supabase/client';
 import {
   Sparkles,
   Loader2,
@@ -145,13 +146,39 @@ export default function DashboardPage() {
       }
     };
 
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('gym:member-updated', () => loadDashboard(false));
-    window.addEventListener('gym:toast-notification', handleToastNotification);
+    let supabaseChannel: any = null;
+    try {
+      const supabase = createClient();
+      supabaseChannel = supabase
+        .channel('realtime_registrations')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'registration_requests',
+          },
+          (payload: any) => {
+            playChime();
+            const newRow = payload.new;
+            showToast(
+              '🔔 New QR Registration!',
+              `${newRow?.full_name || 'A customer'} applied for ${newRow?.plan_name_snapshot || 'membership'}.`
+            );
+            loadDashboard(false);
+          }
+        )
+        .subscribe();
+    } catch (realtimeErr) {
+      console.warn('Realtime subscription unavailable, fallback to active polling:', realtimeErr);
+    }
 
     return () => {
       clearInterval(timer);
       if (bc) bc.close();
+      if (supabaseChannel) {
+        supabaseChannel.unsubscribe();
+      }
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('gym:member-updated', () => loadDashboard(false));
       window.removeEventListener('gym:toast-notification', handleToastNotification);

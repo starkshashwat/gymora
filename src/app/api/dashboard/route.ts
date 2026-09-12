@@ -2,68 +2,29 @@ import { NextResponse, NextRequest } from 'next/server';
 import { gymService } from '@/lib/data/service';
 import { isDueToday, isExpiringSoon } from '@/lib/utils/date';
 import { createClient } from '@/lib/supabase/server';
-import { initialGym } from '@/lib/data/mockDb';
+import { resolveCurrentGym } from '@/lib/data/dbSync';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { gymId, isDemoMode, user, isCrossTenantForbidden } = await resolveCurrentGym(request, supabase);
 
-    const isDemoCookie = request.cookies.get('gymora_demo_mode')?.value === 'true';
-    const gymCookie = request.cookies.get('gymora_gym_id')?.value;
-    const sessionCookie = request.cookies.get('gymora_session')?.value === 'true';
+    if (isCrossTenantForbidden) {
+      return NextResponse.json(
+        { success: false, error: 'Access Denied: You do not have permission to access this gym dashboard.' },
+        { status: 403 }
+      );
+    }
 
-    // A visitor is ONLY demo if NOT a real user and holding the demo cookie
-    const isDemoVisitor = !user && isDemoCookie;
-
-    if (!user && !isDemoVisitor && !sessionCookie && !gymCookie) {
+    if (!gymId && !isDemoMode) {
+      const hasSession = request.cookies.get('gymora_session')?.value === 'true';
+      if (hasSession) {
+        return NextResponse.json({ success: false, requireOnboarding: true }, { status: 200 });
+      }
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    let gymId: string | undefined = undefined;
-
-    if (isDemoVisitor) {
-      // Demo visitor gets the mock demo gym (Iron Pulse / Gymora demo data)
-      gymId = initialGym.id;
-    } else {
-      // Real authenticated user or email session
-      // 1. Check user_metadata (ignore if demo gym was mistakenly attached)
-      if (user?.user_metadata?.gym_id && user.user_metadata.gym_id !== initialGym.id) {
-        gymId = user.user_metadata.gym_id;
-      }
-
-      // 2. Check in-memory user map
-      if (!gymId && user) {
-        const memGym = gymService.getUserGym(user.id);
-        if (memGym && memGym !== initialGym.id) {
-          gymId = memGym;
-        }
-      }
-
-      // 3. Check profiles table in Supabase
-      if (!gymId && user) {
-        try {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('gym_id')
-            .eq('id', user.id)
-            .maybeSingle();
-          if (profile?.gym_id && profile.gym_id !== initialGym.id) {
-            gymId = profile.gym_id;
-          }
-        } catch {}
-      }
-
-      // 4. Check cookie fallback
-      if (!gymId && gymCookie && gymCookie !== initialGym.id) {
-        gymId = gymCookie;
-      }
-
-      // Real owner has not completed onboarding yet -> MUST complete onboarding!
-      if (!gymId) {
-        return NextResponse.json({ success: false, requireOnboarding: true }, { status: 200 });
-      }
-    }
+    const isDemoVisitor = isDemoMode;
 
     let metrics;
     let allMembers;
@@ -75,6 +36,24 @@ export async function GET(request: NextRequest) {
       metrics = gymService.getDashboardMetrics(gymId);
       allMembers = gymService.getMembersWithDetails(gymId);
       pendingRegistrations = gymService.getRegistrations(gymId).filter((r) => r.status === 'pending');
+
+      // Check Supabase for new registrations submitted from other devices
+      if (gymId && !isDemoVisitor) {
+        try {
+          const { data: dbPending } = await supabase
+            .from('registration_requests')
+            .select('*')
+            .eq('gym_id', gymId)
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+          if (dbPending && dbPending.length > 0) {
+            pendingRegistrations = dbPending;
+          }
+        } catch (dbErr) {
+          console.warn('Supabase dashboard pending registrations query error:', dbErr);
+        }
+      }
     } catch (e: any) {
       if (e.message.includes('Gym not found')) {
         return NextResponse.json({ success: false, requireOnboarding: true }, { status: 403 });
