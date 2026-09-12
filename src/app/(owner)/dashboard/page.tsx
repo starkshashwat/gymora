@@ -123,7 +123,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard(true);
-    const timer = setInterval(() => loadDashboard(false), 4000);
     
     let bc: BroadcastChannel | null = null;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -182,7 +181,6 @@ export default function DashboardPage() {
     }
 
     return () => {
-      clearInterval(timer);
       if (bc) bc.close();
       if (supabaseChannel) {
         supabaseChannel.unsubscribe();

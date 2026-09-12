@@ -27,74 +27,109 @@ export async function GET(request: NextRequest) {
     const isDemoVisitor = isDemoMode;
 
     let metrics;
-    let allMembers;
+    let dueToday = [];
+    let overdue = [];
+    let expiringSoon = [];
+    let recentPayments = [];
+    let pendingRegistrations = [];
     let gym;
-    let pendingRegistrations;
 
-    try {
-      gym = gymService.getGym(gymId);
+    gym = gymService.getGym(gymId);
+
+    if (user && supabase) {
+      try {
+        // 1. Metrics via RPC
+        const { data: dbMetrics } = await supabase.rpc('get_dashboard_metrics', { p_gym_id: gymId });
+        if (dbMetrics) metrics = dbMetrics;
+
+        // 2. Pending registrations
+        const { data: dbPending } = await supabase
+          .from('registration_requests')
+          .select('*')
+          .eq('gym_id', gymId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+        if (dbPending) pendingRegistrations = dbPending;
+
+        // 3. Recent payments with member info
+        const { data: dbPayments } = await supabase
+          .from('payments')
+          .select('*, members(full_name)')
+          .eq('gym_id', gymId)
+          .eq('status', 'paid')
+          .order('paid_at', { ascending: false })
+          .limit(6);
+        
+        if (dbPayments) {
+          recentPayments = dbPayments.map((p: any) => ({
+            ...p,
+            member_name: p.members?.full_name || 'Member',
+          }));
+        }
+
+        // We fetch the lists from gymService for now if we don't write huge SQL views, 
+        // but let's strictly limit the memory fetch to active only to avoid N+1 crash.
+        // Or better, fetch lists via db queries.
+        
+        // Due today
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const { data: dbDueToday } = await supabase
+          .from('memberships')
+          .select('*, members(*)')
+          .eq('gym_id', gymId)
+          .eq('due_date', todayStr)
+          .in('status', ['pending', 'partial']);
+        
+        if (dbDueToday) {
+          dueToday = dbDueToday.map((m: any) => ({ ...m.members, membership: m }));
+        }
+
+        // Overdue
+        const { data: dbOverdue } = await supabase
+          .from('memberships')
+          .select('*, members(*)')
+          .eq('gym_id', gymId)
+          .lt('due_date', todayStr)
+          .in('status', ['pending', 'partial']);
+        
+        if (dbOverdue) {
+          overdue = dbOverdue.map((m: any) => ({ ...m.members, membership: m }));
+        }
+
+        // Expiring soon
+        const nextWeekStr = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const { data: dbExpiring } = await supabase
+          .from('memberships')
+          .select('*, members(*)')
+          .eq('gym_id', gymId)
+          .eq('lifecycle', 'active')
+          .lte('end_date', nextWeekStr)
+          .gte('end_date', todayStr);
+        
+        if (dbExpiring) {
+          expiringSoon = dbExpiring.map((m: any) => ({ ...m.members, membership: m }));
+        }
+
+      } catch (dbErr) {
+        console.error('Supabase dashboard error:', dbErr);
+        throw dbErr;
+      }
+    } else {
+      // Fallback for demo mode
       metrics = gymService.getDashboardMetrics(gymId);
-      allMembers = gymService.getMembersWithDetails(gymId);
+      const allMembers = gymService.getMembersWithDetails(gymId, '', 'all', 1, 99999).members;
       pendingRegistrations = gymService.getRegistrations(gymId).filter((r) => r.status === 'pending');
 
-      // Check Supabase for new registrations submitted from other devices
-      if (gymId && !isDemoVisitor) {
-        try {
-          const { data: dbPending } = await supabase
-            .from('registration_requests')
-            .select('*')
-            .eq('gym_id', gymId)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false });
-
-          if (dbPending && dbPending.length > 0) {
-            pendingRegistrations = dbPending;
-          }
-        } catch (dbErr) {
-          console.warn('Supabase dashboard pending registrations query error:', dbErr);
-        }
-      }
-    } catch (e: any) {
-      if (e.message.includes('Gym not found')) {
-        return NextResponse.json({ success: false, requireOnboarding: true }, { status: 403 });
-      }
-      throw e;
+      dueToday = allMembers.filter(m => m.membership && m.membership.outstanding_balance > 0 && isDueToday(m.membership.due_date));
+      overdue = allMembers.filter(m => m.membership && m.membership.outstanding_balance > 0 && m.membership.is_overdue);
+      expiringSoon = allMembers.filter(m => m.membership && m.membership.lifecycle === 'active' && isExpiringSoon(m.membership.end_date, 7));
+      
+      const gymPayments = gymService.payments.filter((p) => p.gym_id === gymId);
+      recentPayments = gymPayments.slice(0, 6).map((p) => {
+        const mem = allMembers.find((m) => m.id === p.member_id);
+        return { ...p, member_name: mem?.full_name || 'Member' };
+      });
     }
-
-    // Due today list
-    const dueToday = allMembers.filter(
-      (m) =>
-        m.membership &&
-        m.membership.outstanding_balance > 0 &&
-        isDueToday(m.membership.due_date)
-    );
-
-    // Overdue list
-    const overdue = allMembers.filter(
-      (m) =>
-        m.membership &&
-        m.membership.outstanding_balance > 0 &&
-        m.membership.is_overdue
-    );
-
-    // Expiring soon list (next 7 days)
-    const expiringSoon = allMembers.filter(
-      (m) =>
-        m.membership &&
-        m.membership.lifecycle === 'active' &&
-        isExpiringSoon(m.membership.end_date, 7)
-    );
-
-    // Recent payments (top 5)
-    // Filter payments manually since gymService.payments is raw global array.
-    const gymPayments = gymService.payments.filter((p) => p.gym_id === gym.id);
-    const recentPayments = gymPayments.slice(0, 6).map((p) => {
-      const mem = allMembers.find((m) => m.id === p.member_id);
-      return {
-        ...p,
-        member_name: mem?.full_name || 'Member',
-      };
-    });
 
     const response = NextResponse.json({
       success: true,

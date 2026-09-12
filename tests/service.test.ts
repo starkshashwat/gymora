@@ -95,7 +95,7 @@ describe('Gym Business Logic & Service Suite', () => {
     }).toThrow(/already converted/);
 
     // Verify new member exists in list
-    const members = gymService.getMembersWithDetails();
+    const members = gymService.getMembersWithDetails().members;
     const created = members.find((m) => m.full_name === 'Vikram Singh');
     expect(created).toBeDefined();
     expect(created!.phone).toBe('+919988112233');
@@ -112,17 +112,16 @@ describe('Gym Business Logic & Service Suite', () => {
     expect(added).toBeDefined();
 
     // Verify member exists
-    const beforeList = gymService.getMembersWithDetails();
+    const beforeList = gymService.getMembersWithDetails().members;
     expect(beforeList.some((m) => m.id === added.id)).toBe(true);
 
     // 2. Delete member
     const deleteSuccess = gymService.deleteMember(added.id);
-    expect(deleteSuccess).toBe(true);
-
-    // 3. Verify member is gone
-    const afterList = gymService.getMembersWithDetails();
-    expect(afterList.some((m) => m.id === added.id)).toBe(false);
-    expect(gymService.getMemberById(added.id)).toBeNull();
+    // 3. Verify member is inactive, not deleted
+    const afterList = gymService.getMembersWithDetails().members;
+    const deactivatedMember = afterList.find(m => m.id === added.id);
+    expect(deactivatedMember).toBeDefined();
+    expect(deactivatedMember?.status).toBe('inactive');
   });
 
   it('maintains strict multi-tenant data isolation by gymId', () => {
@@ -146,12 +145,12 @@ describe('Gym Business Logic & Service Suite', () => {
     });
 
     // Query Gym A: must contain memberA and NOT memberB
-    const membersA = gymService.getMembersWithDetails(gymA);
+    const membersA = gymService.getMembersWithDetails(gymA).members;
     expect(membersA.some((m) => m.id === memberA.id)).toBe(true);
     expect(membersA.some((m) => m.id === memberB.id)).toBe(false);
 
     // Query Gym B: must contain memberB and NOT memberA
-    const membersB = gymService.getMembersWithDetails(gymB);
+    const membersB = gymService.getMembersWithDetails(gymB).members;
     expect(membersB.some((m) => m.id === memberB.id)).toBe(true);
     expect(membersB.some((m) => m.id === memberA.id)).toBe(false);
   });

@@ -155,6 +155,7 @@ export interface Payment {
   provider_payment_id?: string | null;
   paid_at: string;
   notes?: string | null;
+  idempotency_key?: string | null;
   created_by?: string | null;
   created_at: string;
 }
@@ -164,6 +165,7 @@ export interface RegistrationRequest {
   gym_id: string;
   full_name: string;
   phone: string;
+  normalized_phone?: string | null;
   email?: string | null;
   plan_id?: string | null;
   plan_name_snapshot?: string | null;

@@ -245,52 +245,38 @@ export async function recordPaymentInDatabase(
     amount: number;
     payment_method: PaymentMethod;
     notes?: string;
+    idempotency_key?: string;
   },
   gymId: string,
   supabase: any,
   user: any
 ) {
-  // Update in-memory store
-  const result = gymService.recordPayment(params);
+  let dbResult = null;
 
-  // Persist to Supabase if authenticated
+  // Persist to Supabase as single source of truth if authenticated
   if (user && supabase) {
-    try {
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_payment', {
-        p_member_id: params.member_id,
-        p_membership_id: params.membership_id,
-        p_amount: params.amount,
-        p_payment_method: params.payment_method,
-        p_notes: params.notes || null,
-      });
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_payment', {
+      p_gym_id: gymId,
+      p_member_id: params.member_id,
+      p_membership_id: params.membership_id,
+      p_amount: params.amount,
+      p_payment_method: params.payment_method,
+      p_notes: params.notes || null,
+      p_idempotency_key: params.idempotency_key || null,
+    });
 
-      if (rpcErr) {
-        // Fallback table insert
-        await supabase.from('payments').insert({
-          id: result.payment_id,
-          gym_id: gymId,
-          member_id: params.member_id,
-          membership_id: params.membership_id,
-          amount: params.amount,
-          payment_method: params.payment_method,
-          status: 'paid',
-          notes: params.notes?.trim() || null,
-        });
-
-        await supabase
-          .from('memberships')
-          .update({
-            status: result.new_status,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', params.membership_id);
-      }
-    } catch (e) {
-      console.warn('Supabase payment sync warning:', e);
+    if (rpcErr) {
+      console.error('Supabase payment sync error:', rpcErr);
+      throw new Error(rpcErr.message || 'Payment recording failed in database');
     }
+    
+    dbResult = rpcRes;
   }
 
-  return result;
+  // Update in-memory store for fallback/demo/UI consistency
+  const result = gymService.recordPayment(params);
+
+  return dbResult || result;
 }
 
 /**
@@ -303,37 +289,40 @@ export async function approveRegistrationInDatabase(
     amount_received?: number;
     payment_method?: PaymentMethod;
     notes?: string;
+    idempotency_key?: string;
   },
   gymId: string,
   supabase: any,
   user: any
 ) {
-  // Always update memory store
+  let dbResult = null;
+
+  // If user is authenticated, execute in Supabase as source of truth
+  if (user && supabase) {
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('convert_registration', {
+      p_gym_id: gymId,
+      p_registration_id: params.registration_id,
+      p_amount_paid: params.payment_received ? (params.amount_received || 0) : 0,
+      p_payment_method: params.payment_method || 'cash',
+      p_notes: params.notes || null,
+      p_idempotency_key: params.idempotency_key || null,
+    });
+
+    if (rpcErr) {
+      console.error('Supabase convert_registration error:', rpcErr);
+      throw new Error(rpcErr.message || 'Registration conversion failed in database');
+    }
+    
+    dbResult = rpcRes;
+  }
+
+  // Always update memory store for UI consistency
   const memResult = gymService.approveRegistrationWithPayment({
     ...params,
     gym_id: gymId,
   });
 
-  // If user is authenticated, execute in Supabase
-  if (user && supabase) {
-    try {
-      const { data: rpcRes, error: rpcErr } = await supabase.rpc('approve_registration_and_create_member', {
-        p_registration_id: params.registration_id,
-        p_payment_received: !!params.payment_received,
-        p_amount_received: params.amount_received || 0,
-        p_payment_method: params.payment_method || 'cash',
-        p_notes: params.notes || null,
-      });
-
-      if (!rpcErr && rpcRes?.success) {
-        return rpcRes;
-      }
-    } catch (e) {
-      console.warn('Supabase approve_registration warning:', e);
-    }
-  }
-
-  return memResult;
+  return dbResult || memResult;
 }
 
 /**
@@ -429,58 +418,38 @@ export async function renewMemberInDatabase(
     payment_method?: PaymentMethod;
     notes?: string;
     start_date?: string;
+    idempotency_key?: string;
   },
   gymId: string,
   supabase: any,
   user: any
 ) {
-  // Always update memory store
+  let dbResult = null;
+
+  if (user && supabase) {
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('renew_membership', {
+      p_gym_id: gymId,
+      p_member_id: params.member_id,
+      p_plan_id: params.plan_id,
+      p_start_date: params.start_date || new Date().toISOString().slice(0, 10),
+      p_amount_paid: params.amount_paid || 0,
+      p_payment_method: params.payment_method || 'cash',
+      p_idempotency_key: params.idempotency_key || null,
+    });
+
+    if (rpcErr) {
+      console.error('Supabase renew error:', rpcErr);
+      throw new Error(rpcErr.message || 'Renewal failed in database');
+    }
+    
+    dbResult = rpcRes;
+  }
+
+  // Always update memory store for UI consistency
   const memResult = gymService.renewMembership({
     ...params,
     gym_id: gymId,
   });
-
-  if (user && supabase) {
-    try {
-      // 1. Ensure member is active
-      await supabase
-        .from('members')
-        .update({ status: 'active', updated_at: new Date().toISOString() })
-        .eq('id', params.member_id)
-        .eq('gym_id', gymId);
-
-      // 2. Insert new membership cycle
-      await supabase.from('memberships').insert({
-        id: memResult.membership.id,
-        gym_id: gymId,
-        member_id: params.member_id,
-        plan_id: memResult.membership.plan_id,
-        plan_name_snapshot: memResult.membership.plan_name_snapshot,
-        amount_due: memResult.membership.amount_due,
-        start_date: memResult.membership.start_date,
-        due_date: memResult.membership.due_date,
-        end_date: memResult.membership.end_date,
-        status: memResult.membership.status,
-        lifecycle: 'active',
-      });
-
-      // 3. Insert payment if logged
-      if (memResult.payment) {
-        await supabase.from('payments').insert({
-          id: memResult.payment.id,
-          gym_id: gymId,
-          member_id: params.member_id,
-          membership_id: memResult.membership.id,
-          amount: memResult.payment.amount,
-          payment_method: memResult.payment.payment_method,
-          status: 'paid',
-          notes: memResult.payment.notes,
-        });
-      }
-    } catch (e) {
-      console.warn('Supabase renewMemberInDatabase warning:', e);
-    }
-  }
 
   return memResult;
 }

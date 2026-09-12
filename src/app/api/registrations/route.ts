@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const members = gymService.getMembersWithDetails(gymId);
+    const members = gymService.getMembersWithDetails(gymId, '', 'all', 1, 99999).members;
     const enriched = registrations.map((r: any) => {
       let converted_member_id = r.converted_member_id;
       if (!converted_member_id && r.status === 'converted') {
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       amount_received,
       payment_method,
       notes,
+      idempotency_key,
     } = body;
 
     if (!registration_id) {
@@ -92,6 +93,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const safeIdempotencyKey = idempotency_key || `reg_${registration_id}_${Date.now()}`;
+
     const result = await approveRegistrationInDatabase(
       {
         registration_id,
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
         amount_received: Number(amount_received || 0),
         payment_method: payment_method || 'cash',
         notes: notes?.trim() || undefined,
+        idempotency_key: safeIdempotencyKey,
       },
       gymId,
       supabase,

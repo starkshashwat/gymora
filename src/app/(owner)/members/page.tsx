@@ -91,22 +91,43 @@ export default function MembersPage() {
   const [cancellationReason, setCancellationReason] = useState('');
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const loadMembers = async () => {
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const loadMembers = async (resetPage = true) => {
     try {
-      setIsLoading(true);
+      if (resetPage) {
+        setIsLoading(true);
+        setPage(1);
+      } else {
+        setIsLoadingMore(true);
+      }
+
+      const currentPage = resetPage ? 1 : page + 1;
       const queryParams = new URLSearchParams();
       if (search) queryParams.set('q', search);
       if (filter !== 'all') queryParams.set('filter', filter);
+      queryParams.set('page', currentPage.toString());
+      queryParams.set('limit', '50');
 
       const res = await fetch(`/api/members?${queryParams.toString()}`);
       const data = await res.json();
+      
       if (data.success) {
-        setMembers(data.members || []);
+        if (resetPage) {
+          setMembers(data.members || []);
+        } else {
+          setMembers((prev) => [...prev, ...(data.members || [])]);
+        }
+        setHasMore((data.members || []).length === 50 && members.length + (data.members || []).length < data.totalCount);
+        if (!resetPage) setPage(currentPage);
       }
     } catch (e) {
       console.error(e);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -692,6 +713,23 @@ export default function MembersPage() {
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => loadMembers(false)}
+            disabled={isLoadingMore}
+            className="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-6 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-50"
+          >
+            {isLoadingMore ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+            ) : (
+              <ArrowRight className="h-4 w-4 text-slate-500 rotate-90" />
+            )}
+            <span>{isLoadingMore ? 'Loading...' : 'Load More'}</span>
+          </button>
+        </div>
+      )}
 
       {/* Cancel Modal */}
       {cancelModalMember && (

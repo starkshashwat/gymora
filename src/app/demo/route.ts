@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getPublicOrigin } from '@/lib/utils/url';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const origin = getPublicOrigin(request);
   const dashboardUrl = new URL('/dashboard', origin);

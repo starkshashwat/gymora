@@ -25,7 +25,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
-  const [gymInfo, setGymInfo] = useState<{ name: string; logoUrl?: string | null }>({ name: 'Gymora' });
+  const [gymInfo, setGymInfo] = useState<{ name: string; logoUrl?: string | null }>({ name: '' });
 
   const fetchGymInfo = async () => {
     try {
@@ -69,7 +69,6 @@ export default function Sidebar() {
   useEffect(() => {
     fetchGymInfo();
     fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 4000);
 
     let bc: BroadcastChannel | null = null;
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -87,7 +86,6 @@ export default function Sidebar() {
     window.addEventListener('gym:settings-updated', fetchGymInfo);
 
     return () => {
-      clearInterval(interval);
       if (bc) bc.close();
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('gym:member-updated', fetchPendingCount);

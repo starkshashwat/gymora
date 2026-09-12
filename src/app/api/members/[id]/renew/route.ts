@@ -28,7 +28,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { plan_id, amount_paid, payment_method, notes, start_date } = body;
+    const { plan_id, amount_paid, payment_method, notes, start_date, idempotency_key } = body;
 
     if (!plan_id) {
       return NextResponse.json(
@@ -36,6 +36,8 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    const safeIdempotencyKey = idempotency_key || `rnw_${memberId}_${plan_id}_${Date.now()}`;
 
     const result = await renewMemberInDatabase(
       {
@@ -45,6 +47,7 @@ export async function POST(
         payment_method: payment_method || 'cash',
         notes: notes?.trim(),
         start_date,
+        idempotency_key: safeIdempotencyKey,
       },
       gymId,
       supabase,

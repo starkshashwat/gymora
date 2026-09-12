@@ -14,13 +14,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
     const filter = (searchParams.get('filter') || 'all') as import('@/lib/types/database').MemberFilterType;
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     if (!gymId && !isDemoMode) {
-      return NextResponse.json({ success: true, members: [] });
+      return NextResponse.json({ success: true, members: [], totalCount: 0 });
     }
 
-    const members = gymService.getMembersWithDetails(gymId, query, filter);
-    return NextResponse.json({ success: true, isDemoMode, members });
+    const { members, totalCount } = gymService.getMembersWithDetails(gymId, query, filter, page, limit);
+    return NextResponse.json({ success: true, isDemoMode, members, totalCount });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

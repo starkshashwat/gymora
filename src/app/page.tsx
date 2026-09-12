@@ -64,12 +64,12 @@ export default function RootLandingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
+            <a
               href="/demo"
               className="text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition hidden sm:block"
             >
               See Demo
-            </Link>
+            </a>
             {isExistingSession ? (
               <Link
                 href="/dashboard"
@@ -128,12 +128,12 @@ export default function RootLandingPage() {
                   Try Now Free
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link
+                <a
                   href="/demo"
                   className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/50 px-8 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
                 >
                   See Demo
-                </Link>
+                </a>
               </div>
 
               {/* Feature Highlights Grid */}

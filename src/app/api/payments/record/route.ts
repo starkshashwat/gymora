@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { gymId, user } = await resolveCurrentGym(request, supabase);
 
     const body = await request.json();
-    const { member_id, membership_id, amount, payment_method, notes } = body;
+    const { member_id, membership_id, amount, payment_method, notes, idempotency_key } = body;
 
     if (!member_id || !membership_id || !amount || !payment_method) {
       return NextResponse.json(
@@ -25,7 +25,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const activeGymId = gymId || 'gym-gymora-01';
+    if (!gymId) {
+      return NextResponse.json(
+        { success: false, error: 'No active gym found for this account. Please complete onboarding.' },
+        { status: 401 }
+      );
+    }
+
+    // Generate idempotency key if the client didn't provide one
+    const safeIdempotencyKey = idempotency_key || `pmt_${member_id}_${membership_id}_${Date.now()}`;
 
     const result = await recordPaymentInDatabase(
       {
@@ -34,8 +42,9 @@ export async function POST(request: NextRequest) {
         amount: Number(amount),
         payment_method: payment_method as PaymentMethod,
         notes,
+        idempotency_key: safeIdempotencyKey,
       },
-      activeGymId,
+      gymId,
       supabase,
       user
     );

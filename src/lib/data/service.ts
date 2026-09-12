@@ -120,16 +120,34 @@ class GymStore {
   getMembersWithDetails(
     gymId?: string,
     query = '',
-    filter: MemberFilterType = 'all'
-  ): MemberWithDetails[] {
+    filter: MemberFilterType = 'all',
+    page = 1,
+    limit = 500
+  ): { members: MemberWithDetails[]; totalCount: number } {
     const gym = this.getGym(gymId);
     const gymMembers = this.members.filter((m) => m.gym_id === gym.id);
 
+    // O(N) optimization: Pre-index memberships and payments
+    const membershipsByMember = new Map<string, Membership[]>();
+    for (const m of this.memberships) {
+      if (m.gym_id === gym.id) {
+        if (!membershipsByMember.has(m.member_id)) membershipsByMember.set(m.member_id, []);
+        membershipsByMember.get(m.member_id)!.push(m);
+      }
+    }
+
+    const paymentsByMembership = new Map<string, Payment[]>();
+    for (const p of this.payments) {
+      if (p.gym_id === gym.id && p.status === 'paid') {
+        if (!paymentsByMembership.has(p.membership_id!)) paymentsByMembership.set(p.membership_id!, []);
+        paymentsByMembership.get(p.membership_id!)!.push(p);
+      }
+    }
+
     const enriched: MemberWithDetails[] = gymMembers.map((member) => {
       // Find latest membership
-      const membership = this.memberships
-        .filter((m) => m.member_id === member.id)
-        .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))[0];
+      const memberMemberships = membershipsByMember.get(member.id) || [];
+      const membership = memberMemberships.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))[0];
 
       if (!membership) {
         return {
@@ -140,16 +158,25 @@ class GymStore {
       }
 
       // Compute total payments for this membership
-      const relatedPayments = this.payments.filter(
-        (p) => p.membership_id === membership.id && p.status === 'paid'
-      );
-      const total_paid = relatedPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const relatedPayments = paymentsByMembership.get(membership.id) || [];
+      const total_paid = relatedPayments
+        .filter(p => p.status === 'paid')
+        .reduce((acc, p) => acc + Number(p.amount), 0);
       const outstanding_balance = Math.max(0, membership.amount_due - total_paid);
       const overdue = isOverdue(membership.due_date, outstanding_balance);
       const days_overdue = overdue ? getDaysOverdue(membership.due_date) : 0;
 
+      let dynamicStatus = membership.status;
+      if (outstanding_balance === 0) {
+        dynamicStatus = 'paid';
+      } else if (total_paid > 0) {
+        dynamicStatus = 'partial';
+      } else {
+        dynamicStatus = 'pending';
+      }
+
       const lastPayment = [...relatedPayments].sort(
-        (a, b) => b.paid_at.localeCompare(a.paid_at)
+        (a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime()
       )[0];
 
       return {
@@ -160,6 +187,7 @@ class GymStore {
           outstanding_balance,
           is_overdue: overdue,
           days_overdue,
+          status: dynamicStatus,
         },
         last_payment_method: lastPayment ? lastPayment.payment_method : null,
       };
@@ -202,11 +230,15 @@ class GymStore {
       );
     }
 
-    return result;
+    // Apply Pagination
+    const startIndex = (page - 1) * limit;
+    const paginated = result.slice(startIndex, startIndex + limit);
+
+    return { members: paginated, totalCount: result.length };
   }
 
   getMemberById(id: string, gymId?: string): { member: MemberWithDetails; payments: Payment[] } | null {
-    const list = this.getMembersWithDetails(gymId);
+    const list = this.getMembersWithDetails(gymId).members;
     const member = list.find((m) => m.id === id);
     if (!member) return null;
 
@@ -219,7 +251,7 @@ class GymStore {
 
   getDashboardMetrics(gymId?: string): DashboardMetrics {
     const gym = this.getGym(gymId);
-    const membersWithDetails = this.getMembersWithDetails(gym.id);
+    const membersWithDetails = this.getMembersWithDetails(gym.id, '', 'all', 1, 99999).members;
     const today = getTodayDateString();
     const currentMonth = today.slice(0, 7);
 
@@ -354,23 +386,30 @@ class GymStore {
     this.members.unshift(newMember);
     this.memberships.unshift(newMembership);
 
-    const result = this.getMembersWithDetails(gym.id).find((m) => m.id === memberId);
+    const result = this.getMembersWithDetails(gym.id, '', 'all', 1, 99999).members.find((m) => m.id === memberId);
     if (!result) throw new Error('Failed to retrieve newly created member');
     return result;
   }
 
   deleteMember(memberId: string, gymId?: string): boolean {
-    const memberIndex = this.members.findIndex(
+    const member = this.members.find(
       (m) => m.id === memberId && (!gymId || m.gym_id === gymId)
     );
-    if (memberIndex === -1) return false;
+    if (!member) return false;
 
-    // Remove member
-    this.members.splice(memberIndex, 1);
-    // Remove memberships for this member
-    this.memberships = this.memberships.filter((m) => m.member_id !== memberId);
-    // Remove payments for this member
-    this.payments = this.payments.filter((p) => p.member_id !== memberId);
+    // Soft delete to protect financial history
+    member.status = 'inactive';
+    
+    // Deactivate active memberships
+    this.memberships.forEach(m => {
+      if (m.member_id === memberId && m.lifecycle === 'active') {
+        m.lifecycle = 'cancelled';
+        m.cancellation_reason = 'Member deactivated';
+        m.cancelled_at = new Date().toISOString();
+      }
+    });
+    
+    // DO NOT DELETE PAYMENTS OR MEMBERSHIPS
     return true;
   }
 
@@ -380,12 +419,14 @@ class GymStore {
     amount: number;
     payment_method: PaymentMethod;
     notes?: string;
+    idempotency_key?: string;
   }): {
     success: boolean;
     payment_id: string;
     total_paid: number;
     remaining_balance: number;
     new_status: PaymentStatus;
+    message?: string;
   } {
     if (params.amount <= 0) {
       throw new Error('Payment amount must be greater than zero');
@@ -394,6 +435,20 @@ class GymStore {
     const membership = this.memberships.find((m) => m.id === params.membership_id);
     if (!membership) {
       throw new Error('Membership record not found');
+    }
+
+    if (params.idempotency_key) {
+      const existingPayment = this.payments.find(p => p.idempotency_key === params.idempotency_key && p.gym_id === membership.gym_id);
+      if (existingPayment) {
+        return {
+          success: true,
+          payment_id: existingPayment.id,
+          total_paid: 0, // Ignored by caller, idempotency response
+          remaining_balance: 0, 
+          new_status: 'paid',
+          message: 'Payment already recorded (idempotent)',
+        };
+      }
     }
 
     // Existing payments
@@ -417,6 +472,7 @@ class GymStore {
       status: 'paid',
       paid_at: new Date().toISOString(),
       notes: params.notes?.trim() || null,
+      idempotency_key: params.idempotency_key || null,
       created_at: new Date().toISOString(),
     };
 

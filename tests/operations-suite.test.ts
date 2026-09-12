@@ -62,7 +62,7 @@ describe('Operations & Gym Management Suite', () => {
     });
 
     it('filters members list by expiring_soon', () => {
-      const expiringList = gymService.getMembersWithDetails(undefined, '', 'expiring_soon');
+      const expiringList = gymService.getMembersWithDetails(undefined, '', 'expiring_soon').members;
       expect(Array.isArray(expiringList)).toBe(true);
       expiringList.forEach((m) => {
         expect(m.membership).not.toBeNull();
@@ -120,7 +120,7 @@ describe('Operations & Gym Management Suite', () => {
 
   describe('4. Excel Export Utility', () => {
     it('formats member records into an Excel workbook structure without errors', () => {
-      const members = gymService.getMembersWithDetails();
+      const members = gymService.getMembersWithDetails().members;
       expect(members.length).toBeGreaterThan(0);
 
       // In Node/Vitest environment, test that exportMembersToExcel generates without error
