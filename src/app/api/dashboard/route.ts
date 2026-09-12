@@ -39,6 +39,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      gym: gymService.getGym(),
       metrics,
       dueToday,
       overdue,

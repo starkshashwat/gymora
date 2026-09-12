@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import {
   Dumbbell,
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   X,
   PlusCircle,
   Bell,
+  LogOut,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -21,9 +23,19 @@ interface NavbarProps {
 }
 
 export default function Navbar({ onAddMemberClick }: NavbarProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {}
+    document.cookie = 'gymora_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    router.push('/');
+  };
 
   const fetchPendingCount = async () => {
     try {
@@ -155,6 +167,17 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
               </button>
             )}
 
+            {/* Exit / Sign Out Button */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-rose-600 transition"
+              title="Sign out of Gymora"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Exit</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -196,6 +219,21 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
                 </Link>
               );
             })}
+
+            {/* Mobile Sign Out */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+                className="w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-base font-semibold text-rose-600 hover:bg-rose-50 transition"
+              >
+                <LogOut className="h-5 w-5 text-rose-500" />
+                <span>Sign Out</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

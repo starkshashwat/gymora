@@ -191,7 +191,8 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to finish onboarding');
       }
 
-      // Success -> Redirect to Dashboard!
+      // Success -> Set cookie and redirect to Dashboard!
+      document.cookie = 'gymora_session=true; path=/; max-age=2592000; SameSite=Lax';
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Something went wrong during onboarding.');

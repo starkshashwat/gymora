@@ -6,6 +6,8 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/dashboard';
 
+  let targetUrl = `${origin}/onboarding`;
+
   if (code) {
     try {
       const supabase = createClient();
@@ -16,22 +18,34 @@ export async function GET(request: Request) {
         } = await supabase.auth.getUser();
 
         if (user) {
+          // Check if gym owner already has a gym assigned
           const { data: profile } = await supabase
             .from('profiles')
             .select('gym_id')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
 
-          if (!profile || !profile.gym_id) {
-            return NextResponse.redirect(`${origin}/onboarding`);
+          if (profile && profile.gym_id) {
+            // Returning gym owner with active gym -> send straight to Dashboard!
+            targetUrl = `${origin}${next}`;
+          } else {
+            // Fresh user without a gym -> start 5-Step Onboarding!
+            targetUrl = `${origin}/onboarding`;
           }
         }
-        return NextResponse.redirect(`${origin}${next}`);
       }
     } catch (e) {
-      // Fallback
+      console.warn('Auth callback exchange fallback:', e);
     }
   }
 
-  return NextResponse.redirect(`${origin}/onboarding`);
+  const response = NextResponse.redirect(targetUrl);
+  // Set session cookie for fast client/middleware synchronization
+  response.cookies.set('gymora_session', 'true', {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    sameSite: 'lax',
+  });
+
+  return response;
 }
