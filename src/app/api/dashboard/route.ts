@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { gymService } from '@/lib/data/service';
-import { isDueToday } from '@/lib/utils/date';
+import { isDueToday, isExpiringSoon } from '@/lib/utils/date';
 import { createClient } from '@/lib/supabase/server';
 import { initialGym } from '@/lib/data/mockDb';
 
@@ -98,6 +98,14 @@ export async function GET(request: NextRequest) {
         m.membership.is_overdue
     );
 
+    // Expiring soon list (next 7 days)
+    const expiringSoon = allMembers.filter(
+      (m) =>
+        m.membership &&
+        m.membership.lifecycle === 'active' &&
+        isExpiringSoon(m.membership.end_date, 7)
+    );
+
     // Recent payments (top 5)
     // Filter payments manually since gymService.payments is raw global array.
     const gymPayments = gymService.payments.filter((p) => p.gym_id === gym.id);
@@ -116,6 +124,7 @@ export async function GET(request: NextRequest) {
       metrics,
       dueToday,
       overdue,
+      expiringSoon,
       recentPayments,
       pendingRegistrations,
     });

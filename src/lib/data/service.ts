@@ -14,6 +14,7 @@ import {
   AutomationLog,
   AutomationEventType,
   SettingsPayload,
+  MemberFilterType,
 } from '../types/database';
 import {
   initialGym,
@@ -23,7 +24,7 @@ import {
   initialPayments,
   initialRegistrations,
 } from './mockDb';
-import { getTodayDateString, isDueToday, isOverdue, getDaysOverdue } from '../utils/date';
+import { getTodayDateString, isDueToday, isOverdue, getDaysOverdue, isExpiringSoon } from '../utils/date';
 import { normalizePhone } from '../utils/phone';
 
 // In-memory persistent state for fast testing & fallback execution
@@ -94,7 +95,7 @@ class GymStore {
   getMembersWithDetails(
     gymId?: string,
     query = '',
-    filter: 'all' | 'paid' | 'due' | 'overdue' | 'paused' | 'cancelled' = 'all'
+    filter: MemberFilterType = 'all'
   ): MemberWithDetails[] {
     const gym = this.getGym(gymId);
     const gymMembers = this.members.filter((m) => m.gym_id === gym.id);
@@ -167,6 +168,13 @@ class GymStore {
       result = result.filter((m) => m.membership?.lifecycle === 'paused');
     } else if (filter === 'cancelled') {
       result = result.filter((m) => m.membership?.lifecycle === 'cancelled');
+    } else if (filter === 'expiring_soon') {
+      result = result.filter(
+        (m) =>
+          m.membership &&
+          m.membership.lifecycle === 'active' &&
+          isExpiringSoon(m.membership.end_date, 7)
+      );
     }
 
     return result;
@@ -193,9 +201,17 @@ class GymStore {
     // Filter payments for this gym
     const gymPayments = this.payments.filter((p) => p.gym_id === gym.id && p.status === 'paid');
 
-    // Today's collection
-    const today_collection = gymPayments
-      .filter((p) => p.paid_at.startsWith(today))
+    // Today's collection and method breakdown
+    const todayPayments = gymPayments.filter((p) => p.paid_at.startsWith(today));
+    const today_collection = todayPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const today_cash_collection = todayPayments
+      .filter((p) => p.payment_method === 'cash')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const today_upi_collection = todayPayments
+      .filter((p) => p.payment_method === 'upi')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+    const today_online_collection = todayPayments
+      .filter((p) => p.payment_method === 'online')
       .reduce((sum, p) => sum + Number(p.amount), 0);
 
     // Month's collection
@@ -208,12 +224,14 @@ class GymStore {
       (m) => m.gym_id === gym.id && m.status === 'active'
     ).length;
 
-    // Total outstanding
+    // Total outstanding and counts
     let total_outstanding = 0;
     let due_today_count = 0;
     let due_today_amount = 0;
     let overdue_count = 0;
     let overdue_amount = 0;
+    let expiring_soon_count = 0;
+    let expiring_soon_amount = 0;
 
     for (const m of membersWithDetails) {
       if (m.membership) {
@@ -228,11 +246,19 @@ class GymStore {
             due_today_amount += bal;
           }
         }
+
+        if (m.membership.lifecycle === 'active' && isExpiringSoon(m.membership.end_date, 7)) {
+          expiring_soon_count++;
+          expiring_soon_amount += m.membership.amount_due;
+        }
       }
     }
 
     return {
       today_collection,
+      today_cash_collection,
+      today_upi_collection,
+      today_online_collection,
       month_collection,
       total_outstanding,
       active_members,
@@ -240,6 +266,8 @@ class GymStore {
       due_today_amount,
       overdue_count,
       overdue_amount,
+      expiring_soon_count,
+      expiring_soon_amount,
     };
   }
 
@@ -647,6 +675,101 @@ class GymStore {
     }
 
     return { success: true, membership_id: membershipId, membership: mship, ...mship };
+  }
+
+  renewMembership(params: {
+    member_id: string;
+    plan_id: string;
+    amount_paid?: number;
+    payment_method?: PaymentMethod;
+    notes?: string;
+    start_date?: string;
+    gym_id?: string;
+  }): {
+    success: boolean;
+    member: MemberWithDetails;
+    membership: Membership;
+    payment?: Payment | null;
+  } {
+    const gym = this.getGym(params.gym_id);
+    const member = this.members.find((m) => m.id === params.member_id && (!params.gym_id || m.gym_id === gym.id));
+    if (!member) throw new Error('Member not found');
+
+    const plan = this.plans.find((p) => p.id === params.plan_id && (!params.gym_id || p.gym_id === gym.id));
+    if (!plan) throw new Error('Membership plan not found');
+
+    // Find latest membership cycle for this member
+    const existingMemberships = this.memberships
+      .filter((m) => m.member_id === member.id)
+      .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''));
+    const currentMship = existingMemberships[0];
+
+    const today = getTodayDateString();
+    let startDate = params.start_date;
+    if (!startDate) {
+      if (currentMship && currentMship.end_date && currentMship.end_date > today && currentMship.lifecycle === 'active') {
+        startDate = currentMship.end_date;
+      } else {
+        startDate = today;
+      }
+    }
+
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + plan.duration_days);
+    const endDate = d.toISOString().slice(0, 10);
+
+    const amountPaid = Math.max(0, Number(params.amount_paid) || 0);
+    const isFullPaid = amountPaid >= plan.price;
+    const isPartial = amountPaid > 0 && amountPaid < plan.price;
+    const paymentStatus: PaymentStatus = isFullPaid ? 'paid' : isPartial ? 'partial' : 'pending';
+
+    const newMembershipId = crypto.randomUUID();
+    const newMembership: Membership = {
+      id: newMembershipId,
+      gym_id: gym.id,
+      member_id: member.id,
+      plan_id: plan.id,
+      plan_name_snapshot: plan.name,
+      amount_due: plan.price,
+      start_date: startDate,
+      due_date: startDate,
+      end_date: endDate,
+      status: paymentStatus,
+      lifecycle: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    this.memberships.unshift(newMembership);
+
+    // Ensure member is active
+    member.status = 'active';
+    member.updated_at = new Date().toISOString();
+
+    let paymentRecord: Payment | null = null;
+    if (amountPaid > 0) {
+      paymentRecord = {
+        id: crypto.randomUUID(),
+        gym_id: gym.id,
+        member_id: member.id,
+        membership_id: newMembershipId,
+        amount: amountPaid,
+        payment_method: params.payment_method || 'cash',
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        notes: params.notes?.trim() || `Plan renewal: ${plan.name}`,
+        created_at: new Date().toISOString(),
+      };
+      this.payments.unshift(paymentRecord);
+    }
+
+    const updated = this.getMemberById(member.id, gym.id);
+    return {
+      success: true,
+      member: updated!.member,
+      membership: newMembership,
+      payment: paymentRecord,
+    };
   }
 
   approveRegistrationWithPayment(params: {

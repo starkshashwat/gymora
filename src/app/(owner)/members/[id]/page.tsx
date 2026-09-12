@@ -8,6 +8,7 @@ import { formatINR } from '@/lib/utils/currency';
 import { formatDisplayDate } from '@/lib/utils/date';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
+import RenewPlanModal from '@/components/members/RenewPlanModal';
 import {
   ArrowLeft,
   Phone,
@@ -42,6 +43,7 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
   const [isLoading, setIsLoading] = useState(true);
 
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Lifecycle action states
@@ -338,6 +340,16 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
 
         {/* Primary Action Buttons & Operations Menu */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Call Member */}
+          <a
+            href={`tel:${member.phone}`}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm transition"
+            title="Call Member"
+          >
+            <Phone className="h-4 w-4 text-slate-600" />
+            <span className="hidden sm:inline">Call</span>
+          </a>
+
           {/* WhatsApp Primary */}
           <a
             href={waUrl}
@@ -348,6 +360,16 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
             <MessageCircle className="h-4 w-4 text-emerald-600" />
             <span>WhatsApp</span>
           </a>
+
+          {/* Renew Plan Primary */}
+          <button
+            onClick={() => setIsRenewModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800 active:scale-95 transition"
+            title="Renew or extend membership cycle"
+          >
+            <RefreshCw className="h-4 w-4 text-emerald-400" />
+            <span>Renew Plan</span>
+          </button>
 
           {/* Mark Paid Primary */}
           <button
@@ -688,6 +710,17 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
         onClose={() => setIsMarkPaidOpen(false)}
         member={member}
         onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      {/* Renew Plan Modal */}
+      <RenewPlanModal
+        isOpen={isRenewModalOpen}
+        onClose={() => setIsRenewModalOpen(false)}
+        member={member}
+        onRenewSuccess={() => {
+          loadData();
+          window.dispatchEvent(new Event('gym:member-updated'));
+        }}
       />
     </div>
   );

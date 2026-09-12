@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { MemberWithDetails, MembershipLifecycle } from '@/lib/types/database';
+import { MemberWithDetails, MembershipLifecycle, MemberFilterType } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
 import { formatDisplayDate } from '@/lib/utils/date';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
+import { exportMembersToExcel } from '@/lib/utils/excelExport';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
+import RenewPlanModal from '@/components/members/RenewPlanModal';
 import {
   Search,
   CheckCircle,
@@ -29,17 +31,29 @@ import {
   HelpCircle,
   RefreshCw,
   X,
+  Phone,
+  Download,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 export default function MembersPage() {
   const [members, setMembers] = useState<MemberWithDetails[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'due' | 'overdue' | 'paid' | 'paused' | 'cancelled'>('all');
+  const [filter, setFilter] = useState<MemberFilterType>('all');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Multi-select for Batch WhatsApp & Export
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Mark Paid modal
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
+
+  // Renew modal
+  const [selectedMemberForRenew, setSelectedMemberForRenew] = useState<MemberWithDetails | null>(null);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Active action menu row ID
@@ -93,6 +107,58 @@ export default function MembersPage() {
   const handleOpenMarkPaid = (member: MemberWithDetails) => {
     setSelectedMember(member);
     setIsMarkPaidOpen(true);
+  };
+
+  const handleOpenRenew = (member: MemberWithDetails) => {
+    setSelectedMemberForRenew(member);
+    setIsRenewModalOpen(true);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === members.length && members.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(members.map((m) => m.id));
+    }
+  };
+
+  const toggleSelectMember = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleExportExcel = (subset: 'all' | 'selected' = 'all') => {
+    const listToExport =
+      subset === 'selected'
+        ? members.filter((m) => selectedIds.includes(m.id))
+        : members;
+
+    if (listToExport.length === 0) {
+      setToastMessage('No members to export in current selection');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    exportMembersToExcel(listToExport, `gymora-members-${filter}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    setToastMessage(`Exported ${listToExport.length} members to Excel!`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleBatchWhatsApp = () => {
+    const selectedMembers = members.filter((m) => selectedIds.includes(m.id));
+    if (selectedMembers.length === 0) return;
+
+    const first = selectedMembers[0];
+    const waUrl = buildWhatsAppReminderUrl({
+      phone: first.phone,
+      name: first.full_name,
+      amount: first.membership?.outstanding_balance || 0,
+      statusType: first.membership?.is_overdue ? 'overdue' : 'due',
+    });
+    window.open(waUrl, '_blank');
+    setToastMessage(`Opened WhatsApp reminder for ${first.full_name} (${selectedMembers.length} selected in queue)`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const handlePaymentSuccess = (res: any) => {
@@ -260,13 +326,24 @@ export default function MembersPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-zinc-800 active:scale-95 transition dark:bg-white dark:text-zinc-900"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Add Member</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => handleExportExcel('all')}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 active:scale-95 transition"
+            title="Export members list to Excel"
+          >
+            <Download className="h-4 w-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-zinc-800 active:scale-95 transition dark:bg-white dark:text-zinc-900"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Add Member</span>
+          </button>
+        </div>
       </div>
 
       {/* Search and Filters Bar */}
@@ -285,7 +362,7 @@ export default function MembersPage() {
 
         {/* Filter Tabs */}
         <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto">
-          {(['all', 'due', 'overdue', 'paid', 'paused', 'cancelled'] as const).map((tab) => (
+          {(['all', 'due', 'overdue', 'expiring_soon', 'paid', 'paused', 'cancelled'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -295,14 +372,64 @@ export default function MembersPage() {
                   : 'hover:text-slate-900'
               }`}
             >
-              {tab}
+              {tab === 'expiring_soon' ? 'Expiring (7d)' : tab}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Batch Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 sm:px-5 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 text-sm font-bold text-emerald-950">
+            <CheckSquare className="h-4 w-4 text-emerald-600" />
+            <span>{selectedIds.length} member{selectedIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleBatchWhatsApp}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 shadow-sm transition"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span>WhatsApp Blast</span>
+            </button>
+            <button
+              onClick={() => handleExportExcel('selected')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-sm"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export Selected</span>
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Members List */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* Table Subheader with Select All */}
+        {members.length > 0 && !isLoading && (
+          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 bg-slate-50 border-b border-slate-100 text-xs font-semibold text-slate-500">
+            <button
+              onClick={toggleSelectAll}
+              className="inline-flex items-center gap-2 hover:text-slate-900 transition font-bold"
+            >
+              {selectedIds.length === members.length && members.length > 0 ? (
+                <CheckSquare className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <Square className="h-4 w-4 text-slate-400" />
+              )}
+              <span>Select All ({members.length})</span>
+            </button>
+            <span>Showing {members.length} members</span>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
@@ -340,42 +467,61 @@ export default function MembersPage() {
               return (
                 <div
                   key={m.id}
-                  className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 transition"
+                  className={`p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                    selectedIds.includes(m.id) ? 'bg-emerald-50/40' : 'hover:bg-slate-50/70'
+                  }`}
                 >
-                  {/* Member Info */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/members/${m.id}`}
-                        className="text-base font-bold text-slate-900 hover:text-emerald-600 transition truncate"
-                      >
-                        {m.full_name}
-                      </Link>
-                      {getLifecycleBadge(lifecycle)}
-                      {getPaymentStatusBadge(m)}
-                      {m.whatsapp_opt_in && (
-                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                          WA Opted-in
-                        </span>
+                  {/* Member Info with Checkbox */}
+                  <div className="min-w-0 flex-1 flex items-start gap-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectMember(m.id);
+                      }}
+                      className="mt-1 p-0.5 text-slate-400 hover:text-emerald-600 shrink-0 transition"
+                      title={selectedIds.includes(m.id) ? 'Deselect' : 'Select'}
+                    >
+                      {selectedIds.includes(m.id) ? (
+                        <CheckSquare className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <Square className="h-4 w-4 text-slate-300 hover:text-slate-400" />
                       )}
-                    </div>
+                    </button>
 
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
-                      <span>{m.phone}</span>
-                      {m.email && <span>• {m.email}</span>}
-                      <span>• Plan: <strong className="text-slate-700">{mship?.plan_name_snapshot || 'None'}</strong></span>
-                      <span>• Member Since: {formatDisplayDate(m.joined_at)}</span>
-                      {mship?.due_date && (
-                        <span>
-                          • Due: <strong className={mship.is_overdue ? 'text-rose-600' : 'text-slate-700'}>{formatDisplayDate(mship.due_date)}</strong>
-                        </span>
-                      )}
-                      {m.last_payment_method && (
-                        <span className="inline-flex items-center gap-1">
-                          • Last: {getPaymentMethodIcon(m.last_payment_method)}
-                          <span className="uppercase text-[11px]">{m.last_payment_method}</span>
-                        </span>
-                      )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/members/${m.id}`}
+                          className="text-base font-bold text-slate-900 hover:text-emerald-600 transition truncate"
+                        >
+                          {m.full_name}
+                        </Link>
+                        {getLifecycleBadge(lifecycle)}
+                        {getPaymentStatusBadge(m)}
+                        {m.whatsapp_opt_in && (
+                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            WA Opted-in
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                        <span>{m.phone}</span>
+                        {m.email && <span>• {m.email}</span>}
+                        <span>• Plan: <strong className="text-slate-700">{mship?.plan_name_snapshot || 'None'}</strong></span>
+                        <span>• Member Since: {formatDisplayDate(m.joined_at)}</span>
+                        {mship?.due_date && (
+                          <span>
+                            • Due: <strong className={mship.is_overdue ? 'text-rose-600' : 'text-slate-700'}>{formatDisplayDate(mship.due_date)}</strong>
+                          </span>
+                        )}
+                        {m.last_payment_method && (
+                          <span className="inline-flex items-center gap-1">
+                            • Last: {getPaymentMethodIcon(m.last_payment_method)}
+                            <span className="uppercase text-[11px]">{m.last_payment_method}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -389,6 +535,16 @@ export default function MembersPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {/* Call Action Button */}
+                      <a
+                        href={`tel:${m.phone}`}
+                        className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition shadow-sm"
+                        title="Call member"
+                      >
+                        <Phone className="h-3.5 w-3.5 text-slate-600" />
+                        <span className="hidden sm:inline">Call</span>
+                      </a>
+
                       {/* WhatsApp Button */}
                       <a
                         href={waUrl}
@@ -430,6 +586,17 @@ export default function MembersPage() {
                               <User className="h-3.5 w-3.5 text-slate-400" />
                               <span>View Profile</span>
                             </Link>
+
+                            <button
+                              onClick={() => {
+                                setActiveMenuId(null);
+                                handleOpenRenew(m);
+                              }}
+                              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-emerald-700 hover:bg-emerald-50 transition"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>Renew Plan</span>
+                            </button>
 
                             {lifecycle === 'active' && (
                               <button
@@ -573,6 +740,17 @@ export default function MembersPage() {
         onClose={() => setIsMarkPaidOpen(false)}
         member={selectedMember}
         onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      {/* Renew Plan Modal */}
+      <RenewPlanModal
+        isOpen={isRenewModalOpen}
+        onClose={() => setIsRenewModalOpen(false)}
+        member={selectedMemberForRenew}
+        onRenewSuccess={() => {
+          loadMembers();
+          window.dispatchEvent(new Event('gym:member-updated'));
+        }}
       />
     </div>
   );

@@ -13,25 +13,41 @@ import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import { formatDisplayDate } from '@/lib/utils/date';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
 import ReviewRegistrationModal from '@/components/registrations/ReviewRegistrationModal';
+import RenewPlanModal from '@/components/members/RenewPlanModal';
 import {
   Sparkles,
   Loader2,
   Bell,
   UserCheck,
   Plus,
+  Phone,
+  Search,
+  Banknote,
+  Smartphone,
+  CreditCard,
+  RefreshCw,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [dueToday, setDueToday] = useState<MemberWithDetails[]>([]);
   const [overdue, setOverdue] = useState<MemberWithDetails[]>([]);
+  const [expiringSoon, setExpiringSoon] = useState<MemberWithDetails[]>([]);
   const [recentPayments, setRecentPayments] = useState<(Payment & { member_name: string })[]>([]);
   const [pendingRegistrations, setPendingRegistrations] = useState<RegistrationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
+  // Filters & Search for Needs Attention
+  const [needsAttentionSearch, setNeedsAttentionSearch] = useState('');
+  const [attentionFilter, setAttentionFilter] = useState<'all' | 'due' | '1-7' | '7+' | 'expiring'>('all');
+
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
+  const [selectedMemberForRenew, setSelectedMemberForRenew] = useState<MemberWithDetails | null>(null);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
   const [selectedRegForReview, setSelectedRegForReview] = useState<RegistrationRequest | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ title: string; subtitle?: string; type?: 'success' | 'alert' } | null>(null);
@@ -67,6 +83,7 @@ export default function DashboardPage() {
         setMetrics(data.metrics);
         setDueToday(data.dueToday || []);
         setOverdue(data.overdue || []);
+        setExpiringSoon(data.expiringSoon || []);
         setRecentPayments(data.recentPayments || []);
         setIsDemoMode(data.isDemoMode || false);
         setPendingRegistrations(data.pendingRegistrations || []);
@@ -157,14 +174,38 @@ export default function DashboardPage() {
     );
   }
 
-  // Combine overdue and due today, sort overdue first
-  const needsAttention = [
-    ...overdue.map(m => ({ ...m, attentionType: 'overdue' as const })),
-    ...dueToday.map(m => ({ ...m, attentionType: 'due' as const }))
+  // Build attention list with sub-filters and search
+  let attentionList: (MemberWithDetails & { attentionType: 'overdue' | 'due' | 'expiring' })[] = [
+    ...overdue.map((m) => ({ ...m, attentionType: 'overdue' as const })),
+    ...dueToday.map((m) => ({ ...m, attentionType: 'due' as const })),
   ];
 
+  if (attentionFilter === 'expiring') {
+    attentionList = expiringSoon.map((m) => ({ ...m, attentionType: 'expiring' as const }));
+  } else if (attentionFilter === 'due') {
+    attentionList = dueToday.map((m) => ({ ...m, attentionType: 'due' as const }));
+  } else if (attentionFilter === '1-7') {
+    attentionList = overdue
+      .filter((m) => (m.membership?.days_overdue || 0) <= 7)
+      .map((m) => ({ ...m, attentionType: 'overdue' as const }));
+  } else if (attentionFilter === '7+') {
+    attentionList = overdue
+      .filter((m) => (m.membership?.days_overdue || 0) > 7)
+      .map((m) => ({ ...m, attentionType: 'overdue' as const }));
+  }
+
+  if (needsAttentionSearch.trim()) {
+    const q = needsAttentionSearch.toLowerCase().trim();
+    attentionList = attentionList.filter(
+      (m) =>
+        m.full_name.toLowerCase().includes(q) ||
+        m.phone.includes(q) ||
+        (m.membership?.plan_name_snapshot && m.membership.plan_name_snapshot.toLowerCase().includes(q))
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex items-start gap-3 rounded-lg p-4 shadow-lg border bg-zinc-900 text-white border-zinc-800 transition animate-in fade-in slide-in-from-top-4 max-w-sm">
@@ -247,21 +288,43 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Primary Metrics */}
+      {/* Primary Metrics: Collection + Cash/UPI Drawer Reconciliation */}
       <div className="space-y-6">
-        {/* Today's Collection */}
-        <div>
-          <div className="text-[11px] font-bold tracking-widest text-zinc-500 uppercase mb-2">Today</div>
-          <div className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-            {formatINR(metrics?.today_collection)} <span className="text-xl text-zinc-400 font-normal">collected</span>
-          </div>
-          <div className="text-sm text-zinc-500 mt-1">
-            {recentPayments.filter(p => new Date(p.paid_at).toDateString() === new Date().toDateString()).length} payments today
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-bold tracking-widest text-zinc-500 uppercase mb-1">Today's Collection</div>
+              <div className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+                {formatINR(metrics?.today_collection)}{' '}
+                <span className="text-xl text-zinc-400 font-normal">collected</span>
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">
+                {recentPayments.filter(p => new Date(p.paid_at).toDateString() === new Date().toDateString()).length} payments recorded today
+              </div>
+            </div>
+
+            {/* Cash Drawer Method Breakdown */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-900/50 px-3 py-1.5 text-xs font-bold text-amber-900 dark:text-amber-300">
+                <Banknote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                <span>Cash: {formatINR(metrics?.today_cash_collection || 0)}</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-900/50 px-3 py-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-300">
+                <Smartphone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>UPI: {formatINR(metrics?.today_upi_collection || 0)}</span>
+              </div>
+              {(metrics?.today_online_collection || 0) > 0 && (
+                <div className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/50 px-3 py-1.5 text-xs font-bold text-blue-900 dark:text-blue-300">
+                  <CreditCard className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Online: {formatINR(metrics?.today_online_collection)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Secondary KPIs */}
-        <div className="grid grid-cols-3 gap-4 py-4 border-y border-zinc-200 dark:border-zinc-800">
+        {/* Secondary KPIs: Due Today, Overdue, Expiring Soon, Active Members */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-y border-zinc-200 dark:border-zinc-800">
           <div>
             <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Due Today</div>
             <div className="text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100">{formatINR(metrics?.due_today_amount)}</div>
@@ -271,61 +334,137 @@ export default function DashboardPage() {
             <div className="text-base sm:text-lg font-medium text-rose-600 dark:text-rose-400">{formatINR(metrics?.overdue_amount)}</div>
           </div>
           <div>
-            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Active</div>
+            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Expiring (7d)</div>
+            <div className="text-base sm:text-lg font-medium text-amber-600 dark:text-amber-400">
+              {metrics?.expiring_soon_count || expiringSoon.length || 0} members
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold tracking-wider text-zinc-500 uppercase mb-1">Active Members</div>
             <div className="text-base sm:text-lg font-medium text-zinc-900 dark:text-zinc-100">{metrics?.active_members || 0}</div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 pt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 pt-2">
         {/* Left Column: Needs Attention */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
+          <div className="space-y-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Needs attention</h2>
+                <span className="text-xs font-bold text-zinc-400">({attentionList.length})</span>
+              </div>
+            </div>
+
+            {/* Quick Search inside Needs Attention */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              <input
+                type="text"
+                value={needsAttentionSearch}
+                onChange={(e) => setNeedsAttentionSearch(e.target.value)}
+                placeholder="Search due or overdue members..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 py-1.5 pl-8 pr-3 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-950 dark:focus:ring-white"
+              />
+            </div>
+
+            {/* Sub-filter chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold text-zinc-600 dark:text-zinc-400 pt-1">
+              {[
+                { id: 'all', label: 'All Due' },
+                { id: 'due', label: 'Due Today' },
+                { id: '1-7', label: '1–7d Overdue' },
+                { id: '7+', label: '7d+ Critical' },
+                { id: 'expiring', label: `Expiring Soon (${expiringSoon.length})` },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setAttentionFilter(tab.id as any)}
+                  className={`rounded-lg px-2.5 py-1 transition whitespace-nowrap ${
+                    attentionFilter === tab.id
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm'
+                      : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {needsAttention.length === 0 ? (
+          {attentionList.length === 0 ? (
             <div className="py-8 text-sm text-zinc-500">
-              You're all clear. No members are currently due or overdue.
+              You're all clear. No members match the current attention filter.
             </div>
           ) : (
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-              {needsAttention.map((m) => {
+              {attentionList.map((m) => {
                 const isOverdue = m.attentionType === 'overdue';
+                const isExpiring = m.attentionType === 'expiring';
                 const waUrl = buildWhatsAppReminderUrl({
                   phone: m.phone,
                   name: m.full_name,
                   amount: m.membership?.outstanding_balance || 0,
-                  statusType: m.attentionType,
+                  statusType: isOverdue ? 'overdue' : 'due',
                 });
 
                 return (
-                  <div key={m.id} className="py-3 flex items-center justify-between group">
-                    <div>
+                  <div key={m.id} className="py-3 flex items-center justify-between gap-3 group">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <Link href={`/members/${m.id}`} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:underline">{m.full_name}</Link>
-                        <span className="text-xs text-zinc-500">• {formatINR(m.membership?.outstanding_balance)}</span>
+                        <Link href={`/members/${m.id}`} className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:underline truncate">
+                          {m.full_name}
+                        </Link>
+                        <span className="text-xs text-zinc-500 shrink-0">• {formatINR(m.membership?.outstanding_balance || 0)}</span>
                       </div>
                       <div className="text-xs mt-0.5">
                         {isOverdue ? (
-                          <span className="text-rose-600 dark:text-rose-400">{m.membership?.days_overdue} days overdue</span>
+                          <span className="text-rose-600 dark:text-rose-400 font-medium">{m.membership?.days_overdue} days overdue</span>
+                        ) : isExpiring ? (
+                          <span className="text-amber-600 dark:text-amber-500 font-medium">Expires {formatDisplayDate(m.membership?.end_date)}</span>
                         ) : (
-                          <span className="text-amber-600 dark:text-amber-500">Due today</span>
+                          <span className="text-amber-600 dark:text-amber-500 font-medium">Due today</span>
                         )}
+                        <span className="text-zinc-400 ml-2">({m.membership?.plan_name_snapshot})</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* 1-Tap Call */}
+                      <a
+                        href={`tel:${m.phone}`}
+                        title={`Call ${m.full_name}`}
+                        className="h-7 w-7 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                      >
+                        <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      </a>
+
+                      {/* WhatsApp Reminder */}
                       <a
                         href={waUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-7 px-3 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                        className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
                       >
                         WhatsApp
                       </a>
+
+                      {/* Renew Button */}
+                      <button
+                        onClick={() => {
+                          setSelectedMemberForRenew(m as MemberWithDetails);
+                          setIsRenewModalOpen(true);
+                        }}
+                        className="h-7 px-2.5 inline-flex items-center justify-center rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-medium text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors"
+                      >
+                        Renew
+                      </button>
+
+                      {/* Mark Paid Button */}
                       <button
                         onClick={() => { setSelectedMember(m as MemberWithDetails); setIsMarkPaidOpen(true); }}
-                        className="h-7 px-3 inline-flex items-center justify-center rounded bg-zinc-900 dark:bg-white text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+                        className="h-7 px-2.5 inline-flex items-center justify-center rounded bg-zinc-900 dark:bg-white text-xs font-medium text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
                       >
                         Mark Paid
                       </button>
@@ -374,6 +513,16 @@ export default function DashboardPage() {
         onClose={() => setIsMarkPaidOpen(false)}
         member={selectedMember}
         onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      <RenewPlanModal
+        isOpen={isRenewModalOpen}
+        onClose={() => setIsRenewModalOpen(false)}
+        member={selectedMemberForRenew}
+        onSuccess={() => {
+          loadDashboard();
+          window.dispatchEvent(new Event('gym:member-updated'));
+        }}
       />
 
       <ReviewRegistrationModal

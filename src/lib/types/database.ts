@@ -250,9 +250,14 @@ export interface MemberWithDetails extends Member {
   last_payment_method?: PaymentMethod | null;
 }
 
+export type MemberFilterType = 'all' | 'paid' | 'due' | 'overdue' | 'paused' | 'cancelled' | 'expiring_soon';
+
 // Dashboard Aggregate Metrics
 export interface DashboardMetrics {
   today_collection: number;
+  today_cash_collection?: number;
+  today_upi_collection?: number;
+  today_online_collection?: number;
   month_collection: number;
   total_outstanding: number;
   active_members: number;
@@ -260,4 +265,6 @@ export interface DashboardMetrics {
   due_today_amount: number;
   overdue_count: number;
   overdue_amount: number;
+  expiring_soon_count?: number;
+  expiring_soon_amount?: number;
 }

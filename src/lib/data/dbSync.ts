@@ -393,3 +393,70 @@ export async function reactivateMembershipInDatabase(
 
   return memResult;
 }
+
+/**
+ * Renew membership cycle and record payment in database and in-memory store.
+ */
+export async function renewMemberInDatabase(
+  params: {
+    member_id: string;
+    plan_id: string;
+    amount_paid?: number;
+    payment_method?: PaymentMethod;
+    notes?: string;
+    start_date?: string;
+  },
+  gymId: string,
+  supabase: any,
+  user: any
+) {
+  // Always update memory store
+  const memResult = gymService.renewMembership({
+    ...params,
+    gym_id: gymId,
+  });
+
+  if (user && supabase) {
+    try {
+      // 1. Ensure member is active
+      await supabase
+        .from('members')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', params.member_id)
+        .eq('gym_id', gymId);
+
+      // 2. Insert new membership cycle
+      await supabase.from('memberships').insert({
+        id: memResult.membership.id,
+        gym_id: gymId,
+        member_id: params.member_id,
+        plan_id: memResult.membership.plan_id,
+        plan_name_snapshot: memResult.membership.plan_name_snapshot,
+        amount_due: memResult.membership.amount_due,
+        start_date: memResult.membership.start_date,
+        due_date: memResult.membership.due_date,
+        end_date: memResult.membership.end_date,
+        status: memResult.membership.status,
+        lifecycle: 'active',
+      });
+
+      // 3. Insert payment if logged
+      if (memResult.payment) {
+        await supabase.from('payments').insert({
+          id: memResult.payment.id,
+          gym_id: gymId,
+          member_id: params.member_id,
+          membership_id: memResult.membership.id,
+          amount: memResult.payment.amount,
+          payment_method: memResult.payment.payment_method,
+          status: 'paid',
+          notes: memResult.payment.notes,
+        });
+      }
+    } catch (e) {
+      console.warn('Supabase renewMemberInDatabase warning:', e);
+    }
+  }
+
+  return memResult;
+}

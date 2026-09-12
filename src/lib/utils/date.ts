@@ -3,12 +3,15 @@
  * Avoids timezone skew by standardizing on YYYY-MM-DD date strings.
  */
 
-export function getTodayDateString(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+export function formatISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+export function getTodayDateString(): string {
+  return formatISODate(new Date());
 }
 
 export function parseDateString(dateStr: string): Date {
@@ -45,4 +48,18 @@ export function formatDisplayDate(dateStr: string | null | undefined): string {
     month: 'short',
     year: 'numeric',
   });
+}
+
+export function getDaysUntil(dateStr: string | null | undefined): number {
+  if (!dateStr) return -1;
+  const today = parseDateString(getTodayDateString());
+  const target = parseDateString(dateStr.slice(0, 10));
+  const diffTime = target.getTime() - today.getTime();
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
+}
+
+export function isExpiringSoon(endDateStr: string | null | undefined, withinDays = 7): boolean {
+  if (!endDateStr) return false;
+  const days = getDaysUntil(endDateStr);
+  return days >= 0 && days <= withinDays;
 }
