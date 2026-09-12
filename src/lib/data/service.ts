@@ -480,6 +480,110 @@ class GymStore {
       membership_id: mshipId,
     };
   }
+
+  onboardGymOwner(payload: import('../types/database').OnboardingPayload): {
+    success: boolean;
+    gym_id: string;
+    gym_slug: string;
+    imported_count: number;
+  } {
+    const gymId = 'gym-' + Date.now();
+    const cleanSlug =
+      (payload.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'gymora';
+
+    const newGym: Gym = {
+      id: gymId,
+      name: payload.gym_name.trim(),
+      slug: cleanSlug,
+      phone: normalizePhone(payload.phone),
+      email: null,
+      address: payload.address?.trim() || null,
+      logo_url: null,
+      payment_mode: payload.payment_mode,
+      upi_id: payload.upi_id?.trim() || null,
+      upi_qr_url: payload.upi_qr_url || null,
+      gateway_provider: payload.gateway_provider || null,
+      gateway_key_id: payload.gateway_key_id?.trim() || null,
+      gateway_key_secret: payload.gateway_key_secret?.trim() || null,
+      whatsapp_mode: payload.whatsapp_mode,
+      fb_waba_id: payload.fb_waba_id?.trim() || null,
+      fb_phone_number_id: payload.fb_phone_number_id?.trim() || null,
+      fb_access_token: payload.fb_access_token?.trim() || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    this.gyms.unshift(newGym);
+
+    // Create plans
+    const createdPlans: MembershipPlan[] = [];
+    if (payload.plans && payload.plans.length > 0) {
+      payload.plans.forEach((p) => {
+        const plan: MembershipPlan = {
+          id: 'plan-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+          gym_id: gymId,
+          name: p.name,
+          duration_days: p.duration_days,
+          price: p.price,
+          description: p.description || null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.plans.unshift(plan);
+        createdPlans.push(plan);
+      });
+    }
+
+    // Import members if provided
+    let importedCount = 0;
+    if (payload.imported_members && payload.imported_members.length > 0) {
+      payload.imported_members.forEach((m) => {
+        const memberId = 'member-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        const member: Member = {
+          id: memberId,
+          gym_id: gymId,
+          full_name: m.full_name,
+          phone: m.phone,
+          email: m.email || null,
+          status: 'active',
+          joined_at: m.start_date || getTodayDateString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.members.unshift(member);
+
+        const matchingPlan =
+          createdPlans.find((cp) => cp.name.toLowerCase() === (m.plan_name || '').toLowerCase()) ||
+          createdPlans[0];
+
+        const mshipId = 'mship-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        const membership: Membership = {
+          id: mshipId,
+          gym_id: gymId,
+          member_id: memberId,
+          plan_id: matchingPlan?.id || null,
+          plan_name_snapshot: matchingPlan?.name || m.plan_name || 'Standard',
+          amount_due: m.amount_due || matchingPlan?.price || 1500,
+          start_date: m.start_date || getTodayDateString(),
+          due_date: m.due_date || getTodayDateString(),
+          end_date: null,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        this.memberships.unshift(membership);
+        importedCount++;
+      });
+    }
+
+    return {
+      success: true,
+      gym_id: gymId,
+      gym_slug: cleanSlug,
+      imported_count: importedCount,
+    };
+  }
 }
 
 // Global Singleton Store

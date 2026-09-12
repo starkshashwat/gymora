@@ -35,6 +35,16 @@ create table if not exists public.gyms (
   email text,
   address text,
   logo_url text,
+  payment_mode text not null default 'local_qr',
+  upi_id text,
+  upi_qr_url text,
+  gateway_provider text,
+  gateway_key_id text,
+  gateway_key_secret text,
+  whatsapp_mode text not null default 'local_click_to_chat',
+  fb_waba_id text,
+  fb_phone_number_id text,
+  fb_access_token text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

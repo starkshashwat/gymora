@@ -4,6 +4,10 @@ export type PaymentMethod = 'cash' | 'upi' | 'online' | 'other';
 export type PaymentStatus = 'pending' | 'partial' | 'paid' | 'refunded' | 'void';
 export type RegistrationStatus = 'pending' | 'approved' | 'rejected' | 'converted';
 
+export type PaymentMode = 'local_qr' | 'gateway';
+export type GatewayProvider = 'razorpay' | 'phonepe' | 'cashfree' | 'paytm';
+export type WhatsAppMode = 'local_click_to_chat' | 'cloud_api';
+
 export interface Gym {
   id: string;
   name: string;
@@ -12,8 +16,52 @@ export interface Gym {
   email?: string | null;
   address?: string | null;
   logo_url?: string | null;
+  payment_mode?: PaymentMode;
+  upi_id?: string | null;
+  upi_qr_url?: string | null;
+  gateway_provider?: GatewayProvider | null;
+  gateway_key_id?: string | null;
+  gateway_key_secret?: string | null;
+  whatsapp_mode?: WhatsAppMode;
+  fb_waba_id?: string | null;
+  fb_phone_number_id?: string | null;
+  fb_access_token?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ImportedMemberRow {
+  full_name: string;
+  phone: string;
+  email?: string;
+  plan_name?: string;
+  amount_due?: number;
+  due_date?: string;
+  start_date?: string;
+}
+
+export interface OnboardingPayload {
+  gym_name: string;
+  address?: string;
+  phone: string;
+  slug: string;
+  payment_mode: PaymentMode;
+  upi_id?: string;
+  upi_qr_url?: string;
+  gateway_provider?: GatewayProvider;
+  gateway_key_id?: string;
+  gateway_key_secret?: string;
+  whatsapp_mode: WhatsAppMode;
+  fb_waba_id?: string;
+  fb_phone_number_id?: string;
+  fb_access_token?: string;
+  plans: Array<{
+    name: string;
+    duration_days: number;
+    price: number;
+    description?: string;
+  }>;
+  imported_members?: ImportedMemberRow[];
 }
 
 export interface Profile {
