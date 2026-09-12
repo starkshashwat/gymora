@@ -25,14 +25,13 @@ import {
 } from 'lucide-react';
 import LogoUploader from '@/components/ui/LogoUploader';
 
-export type SettingsSection = 'profile' | 'registration' | 'payments' | 'whatsapp' | 'automation' | 'branding';
+export type SettingsSection = 'profile' | 'payments' | 'whatsapp' | 'automation' | 'branding';
 
 interface SettingsSnapshot {
   gymName: string;
   phone: string;
   email: string;
   address: string;
-  slug: string;
   logoUrl: string;
   upiId: string;
   upiQrUrl: string;
@@ -45,7 +44,8 @@ interface SettingsSnapshot {
   fbWabaId: string;
   fbPhoneNumberId: string;
   autoCancelDays: number | null;
-  customDomain: string;
+  dashboardDomain: string;
+  landingDomain: string;
   isDomainVerified: boolean;
   brandColor: string;
 }
@@ -56,18 +56,16 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = useState(0);
 
   // Group 1: Gym Profile
   const [gymName, setGymName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [copiedDerivedUrl, setCopiedDerivedUrl] = useState(false);
 
-  // Group 2: Online Registration
-  const [slug, setSlug] = useState('');
-  const [copiedRegistrationUrl, setCopiedRegistrationUrl] = useState(false);
-
-  // Group 3: Payments
+  // Group 2: Payments
   const [upiId, setUpiId] = useState('');
   const [upiQrUrl, setUpiQrUrl] = useState('');
   const [paymentInstructions, setPaymentInstructions] = useState('');
@@ -76,27 +74,40 @@ export default function SettingsPage() {
   const [gatewayKeyId, setGatewayKeyId] = useState('');
   const [gatewayKeySecret, setGatewayKeySecret] = useState('');
 
-  // Group 4: WhatsApp
+  // Group 3: WhatsApp
   const [whatsappMode, setWhatsappMode] = useState<WhatsAppMode>('local_click_to_chat');
   const [fbWabaId, setFbWabaId] = useState('');
   const [fbPhoneNumberId, setFbPhoneNumberId] = useState('');
 
-  // Group 5: Automation
+  // Group 4: Automation
   const [autoCancelDays, setAutoCancelDays] = useState<number | null>(null);
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
 
-  // Group 6: Domain & Branding
+  // Group 5: Domain & Branding
   const [logoUrl, setLogoUrl] = useState('');
-  const [customDomain, setCustomDomain] = useState('');
+  const [dashboardDomain, setDashboardDomain] = useState('');
+  const [landingDomain, setLandingDomain] = useState('');
   const [isDomainVerified, setIsDomainVerified] = useState(false);
   const [brandColor, setBrandColor] = useState('#10b981');
   const [isVerifyingDomain, setIsVerifyingDomain] = useState(false);
   const [domainVerifyResult, setDomainVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [copiedSubdomain, setCopiedSubdomain] = useState(false);
   const [copiedCustomDomain, setCopiedCustomDomain] = useState(false);
 
   // Initial snapshot to track dirty state
   const initialSnapshotRef = useRef<SettingsSnapshot | null>(null);
+
+  // Auto-derived slug from Gym Name
+  const derivedSlug = useMemo(() => {
+    return (
+      gymName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'my-gym'
+    );
+  }, [gymName]);
 
   const loadSettings = async () => {
     try {
@@ -109,10 +120,10 @@ export default function SettingsPage() {
         const gPhone = s.general?.phone || '';
         const gEmail = s.general?.email || '';
         const gAddress = s.general?.address || '';
-        const gSlug = s.general?.slug || '';
         const gLogo = s.general?.logo_url || '';
 
-        const dDomain = s.domain?.custom_domain || '';
+        const dDashDomain = s.domain?.dashboard_domain || '';
+        const dLandingDomain = s.domain?.landing_page_domain || s.domain?.custom_domain || '';
         const dVerified = !!s.domain?.custom_domain_verified;
         const dColor = s.domain?.brand_color || '#10b981';
 
@@ -133,12 +144,17 @@ export default function SettingsPage() {
         setPhone(gPhone);
         setEmail(gEmail);
         setAddress(gAddress);
-        setSlug(gSlug);
         setLogoUrl(gLogo);
 
-        setCustomDomain(dDomain);
+        setDashboardDomain(dDashDomain);
+        setLandingDomain(dLandingDomain);
         setIsDomainVerified(dVerified);
         setBrandColor(dColor);
+
+        // Apply brand color immediately
+        if (typeof document !== 'undefined') {
+          document.documentElement.style.setProperty('--brand-color', dColor);
+        }
 
         setUpiId(pUpi);
         setUpiQrUrl(pQr);
@@ -158,7 +174,6 @@ export default function SettingsPage() {
           phone: gPhone,
           email: gEmail,
           address: gAddress,
-          slug: gSlug,
           logoUrl: gLogo,
           upiId: pUpi,
           upiQrUrl: pQr,
@@ -171,10 +186,12 @@ export default function SettingsPage() {
           fbWabaId: wWaba,
           fbPhoneNumberId: wPhoneId,
           autoCancelDays: rDays,
-          customDomain: dDomain,
+          dashboardDomain: dDashDomain,
+          landingDomain: dLandingDomain,
           isDomainVerified: dVerified,
           brandColor: dColor,
         };
+        setSnapshotVersion((v) => v + 1);
       }
       if (data.automationRules) {
         setAutomationRules(data.automationRules);
@@ -190,7 +207,7 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
-  // Compute dirty status
+  // Compute dirty status with snapshotVersion dependency
   const isDirty = useMemo(() => {
     if (!initialSnapshotRef.current) return false;
     const init = initialSnapshotRef.current;
@@ -199,7 +216,6 @@ export default function SettingsPage() {
       phone !== init.phone ||
       email !== init.email ||
       address !== init.address ||
-      slug !== init.slug ||
       logoUrl !== init.logoUrl ||
       upiId !== init.upiId ||
       upiQrUrl !== init.upiQrUrl ||
@@ -212,7 +228,8 @@ export default function SettingsPage() {
       fbWabaId !== init.fbWabaId ||
       fbPhoneNumberId !== init.fbPhoneNumberId ||
       autoCancelDays !== init.autoCancelDays ||
-      customDomain !== init.customDomain ||
+      dashboardDomain !== init.dashboardDomain ||
+      landingDomain !== init.landingDomain ||
       isDomainVerified !== init.isDomainVerified ||
       brandColor !== init.brandColor
     );
@@ -221,7 +238,6 @@ export default function SettingsPage() {
     phone,
     email,
     address,
-    slug,
     logoUrl,
     upiId,
     upiQrUrl,
@@ -234,10 +250,19 @@ export default function SettingsPage() {
     fbWabaId,
     fbPhoneNumberId,
     autoCancelDays,
-    customDomain,
+    dashboardDomain,
+    landingDomain,
     isDomainVerified,
     brandColor,
+    snapshotVersion,
   ]);
+
+  const handleBrandColorChange = (color: string) => {
+    setBrandColor(color);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--brand-color', color);
+    }
+  };
 
   const handleDiscard = () => {
     if (!initialSnapshotRef.current) return;
@@ -246,7 +271,6 @@ export default function SettingsPage() {
     setPhone(init.phone);
     setEmail(init.email);
     setAddress(init.address);
-    setSlug(init.slug);
     setLogoUrl(init.logoUrl);
     setUpiId(init.upiId);
     setUpiQrUrl(init.upiQrUrl);
@@ -259,10 +283,15 @@ export default function SettingsPage() {
     setFbWabaId(init.fbWabaId);
     setFbPhoneNumberId(init.fbPhoneNumberId);
     setAutoCancelDays(init.autoCancelDays);
-    setCustomDomain(init.customDomain);
+    setDashboardDomain(init.dashboardDomain);
+    setLandingDomain(init.landingDomain);
     setIsDomainVerified(init.isDomainVerified);
     setBrandColor(init.brandColor);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--brand-color', init.brandColor);
+    }
     setError(null);
+    setSnapshotVersion((v) => v + 1);
   };
 
   const handleSaveSettings = async () => {
@@ -277,11 +306,13 @@ export default function SettingsPage() {
           phone,
           email,
           address,
-          slug,
+          slug: derivedSlug,
           logo_url: logoUrl,
         },
         domain: {
-          custom_domain: customDomain.trim() || null,
+          custom_domain: landingDomain.trim() || null,
+          dashboard_domain: dashboardDomain.trim() || null,
+          landing_page_domain: landingDomain.trim() || null,
           custom_domain_verified: isDomainVerified,
           brand_color: brandColor,
         },
@@ -320,7 +351,6 @@ export default function SettingsPage() {
         phone,
         email,
         address,
-        slug,
         logoUrl,
         upiId,
         upiQrUrl,
@@ -333,12 +363,16 @@ export default function SettingsPage() {
         fbWabaId,
         fbPhoneNumberId,
         autoCancelDays,
-        customDomain,
+        dashboardDomain,
+        landingDomain,
         isDomainVerified,
         brandColor,
       };
 
+      setGatewayKeySecret('');
+      setSnapshotVersion((v) => v + 1);
       setSaveSuccess(true);
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gym:settings-updated'));
       }
@@ -350,19 +384,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleCopyRegistrationUrl = (text: string) => {
+  const handleCopyDerivedUrl = (text: string) => {
     if (typeof navigator !== 'undefined') {
       navigator.clipboard.writeText(text);
-      setCopiedRegistrationUrl(true);
-      setTimeout(() => setCopiedRegistrationUrl(false), 2000);
-    }
-  };
-
-  const handleCopySubdomain = (text: string) => {
-    if (typeof navigator !== 'undefined') {
-      navigator.clipboard.writeText(text);
-      setCopiedSubdomain(true);
-      setTimeout(() => setCopiedSubdomain(false), 2000);
+      setCopiedDerivedUrl(true);
+      setTimeout(() => setCopiedDerivedUrl(false), 2000);
     }
   };
 
@@ -375,10 +401,11 @@ export default function SettingsPage() {
   };
 
   const handleVerifyDns = async () => {
-    if (!customDomain.trim()) {
+    const domainToVerify = landingDomain.trim() || dashboardDomain.trim();
+    if (!domainToVerify) {
       setDomainVerifyResult({
         success: false,
-        message: 'Please enter a custom domain or subdomain first (e.g. portal.mygym.com).',
+        message: 'Please enter a custom domain first (e.g. portal.mygym.com or gym.mybrand.in).',
       });
       return;
     }
@@ -390,7 +417,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings/verify-domain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: customDomain.trim() }),
+        body: JSON.stringify({ domain: domainToVerify }),
       });
 
       const data = await res.json();
@@ -398,14 +425,14 @@ export default function SettingsPage() {
         setIsDomainVerified(true);
         setDomainVerifyResult({
           success: true,
-          message: data.message || 'DNS verified successfully! Your custom domain is now live.',
+          message: data.message || 'DNS verified successfully! Your domain is now live.',
         });
         await handleSaveSettings();
       } else {
         setIsDomainVerified(false);
         setDomainVerifyResult({
           success: false,
-          message: data.message || 'DNS verification failed. Please verify your CNAME/A record points to gymora.swadyum.store and DNS has propagated.',
+          message: data.message || 'DNS verification pending. Please verify your CNAME record points to gymora.swadyum.store and DNS has propagated.',
         });
       }
     } catch (err: any) {
@@ -419,11 +446,12 @@ export default function SettingsPage() {
   };
 
   const handleDisconnectDomain = () => {
-    setCustomDomain('');
+    setDashboardDomain('');
+    setLandingDomain('');
     setIsDomainVerified(false);
     setDomainVerifyResult({
       success: true,
-      message: 'Custom domain removed. Click "Save Changes" to apply.',
+      message: 'Custom domains removed. Click "Save Changes" to apply.',
     });
   };
 
@@ -435,11 +463,10 @@ export default function SettingsPage() {
     description: string;
   }[] = [
     { id: 'profile', label: 'Gym Profile', shortLabel: 'Profile', icon: Building2, description: 'Name, phone, email & address' },
-    { id: 'registration', label: 'Online Registration', shortLabel: 'Registration', icon: QrCode, description: 'Public QR & onboarding link' },
     { id: 'payments', label: 'Payments', shortLabel: 'Payments', icon: CreditCard, description: 'UPI, QR code & gateway' },
     { id: 'whatsapp', label: 'WhatsApp', shortLabel: 'WhatsApp', icon: MessageCircle, description: 'Manual click-to-chat & API' },
     { id: 'automation', label: 'Automation', shortLabel: 'Automation', icon: Clock, description: 'Reminders & cancellation' },
-    { id: 'branding', label: 'Domain & Branding', shortLabel: 'Branding', icon: Globe, description: 'Subdomain, custom domain & logo' },
+    { id: 'branding', label: 'Domain & Branding', shortLabel: 'Branding', icon: Globe, description: 'Custom domain, branding & logo' },
   ];
 
   if (isLoading) {
@@ -450,7 +477,7 @@ export default function SettingsPage() {
     );
   }
 
-  const registrationUrl = `https://${slug || 'your-gym'}.gymora.swadyum.store/join/${slug || 'demo-gym'}`;
+  const defaultPlatformUrl = `https://gymora.swadyum.store/join/${derivedSlug}`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 pb-32">
@@ -507,8 +534,8 @@ export default function SettingsPage() {
       )}
 
       {/* Section Navigation */}
-      {/* Mobile Grid Navigation (2 columns x 3 rows for high clarity & touch targets) */}
-      <div className="sm:hidden grid grid-cols-2 gap-2">
+      {/* Mobile Grid Navigation (clean responsive tactile cards) */}
+      <div className="sm:hidden grid grid-cols-2 sm:grid-cols-3 gap-2">
         {sections.map((sec) => {
           const Icon = sec.icon;
           const isActive = activeSection === sec.id;
@@ -559,7 +586,7 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Gym Profile</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Basic identity and official contact details for your gym displayed across receipts and member notifications.
+              Official name and contact information. Your gym name automatically determines your unique QR join link.
             </p>
           </div>
 
@@ -575,6 +602,51 @@ export default function SettingsPage() {
                 placeholder="e.g. Iron Pulse Fitness"
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
               />
+            </div>
+
+            {/* Auto-derived QR & Join Link Box */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/80 dark:bg-zinc-900/60 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  Public Registration Link (Auto-Generated from Gym Name)
+                </span>
+                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                  Slug: {derivedSlug}
+                </span>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs font-mono text-zinc-900 dark:text-zinc-100 break-all font-medium">
+                  {defaultPlatformUrl}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDerivedUrl(defaultPlatformUrl)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition min-h-[38px]"
+                  >
+                    {copiedDerivedUrl ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-emerald-600 font-semibold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={`/join/${derivedSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition min-h-[38px]"
+                  >
+                    <span>Preview</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -620,93 +692,10 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* SECTION 2: ONLINE REGISTRATION */}
-      {activeSection === 'registration' && (
-        <div className="space-y-6 max-w-2xl">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Online Registration & Public QR</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Allow new walk-in members to scan a QR code at your front desk and submit their details directly into your dashboard.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Gym Slug (Web URL identifier) *
-              </label>
-              <input
-                type="text"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                placeholder="e.g. iron-pulse"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
-              />
-              <p className="text-[11px] text-zinc-400 mt-1">
-                Only lowercase letters, numbers, and hyphens.
-              </p>
-            </div>
-
-            {/* Live Registration Link Box */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/70 dark:bg-zinc-900/50 space-y-3">
-              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">
-                Public Member Onboarding Link
-              </span>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs font-mono text-zinc-800 dark:text-zinc-200 break-all">
-                  {registrationUrl}
-                </span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleCopyRegistrationUrl(registrationUrl)}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition min-h-[44px]"
-                  >
-                    {copiedRegistrationUrl ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="text-emerald-600 font-semibold">Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>Copy Link</span>
-                      </>
-                    )}
-                  </button>
-                  <a
-                    href={`/join/${slug || 'demo-gym'}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition min-h-[44px]"
-                  >
-                    <span>Preview</span>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Reception QR Guidance */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
-              <div className="flex items-center gap-2">
-                <QrCode className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <h3 className="text-xs font-semibold text-emerald-900 dark:text-emerald-300">
-                  Reception Desk Walk-in Flow
-                </h3>
-              </div>
-              <p className="text-xs text-emerald-800 dark:text-emerald-400 leading-relaxed">
-                Print the QR code from the public onboarding page and place it at your reception desk. When new members scan it, their application appears in your <strong>Signups</strong> tab awaiting your 1-tap payment verification and approval.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SECTION 3: PAYMENTS */}
+      {/* SECTION 2: PAYMENTS */}
       {activeSection === 'payments' && (
         <div className="space-y-8 max-w-2xl">
-          {/* Section 3.1: Manual Payments */}
+          {/* Section 2.1: Manual Payments */}
           <div className="space-y-4">
             <div>
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Manual Payment Collection</h2>
@@ -757,7 +746,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 3.2: Online Payment Gateway */}
+          {/* Section 2.2: Online Payment Gateway */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -843,7 +832,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* SECTION 4: WHATSAPP */}
+      {/* SECTION 3: WHATSAPP */}
       {activeSection === 'whatsapp' && (
         <div className="space-y-6 max-w-2xl">
           <div>
@@ -928,10 +917,10 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* SECTION 5: AUTOMATION */}
+      {/* SECTION 4: AUTOMATION */}
       {activeSection === 'automation' && (
         <div className="space-y-8 max-w-3xl">
-          {/* 5.1 Auto-cancellation rule */}
+          {/* 4.1 Auto-cancellation rule */}
           <div className="space-y-4">
             <div>
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Membership Auto-Cancellation Rule</h2>
@@ -976,7 +965,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* 5.2 Reminder Rules & Automation Schedule Engine */}
+          {/* 4.2 Reminder Rules & Automation Schedule Engine */}
           <div className="space-y-4">
             <div>
               <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Automated Reminder Schedules</h2>
@@ -1031,13 +1020,13 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* SECTION 6: DOMAIN & BRANDING */}
+      {/* SECTION 5: DOMAIN & BRANDING */}
       {activeSection === 'branding' && (
         <div className="space-y-8 max-w-3xl">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Domain & White-Label Branding</h2>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Custom Domains & Branding</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Customize your gym&apos;s brand appearance, logo, and host registration under your own domain name.
+              Connect your own custom domains for your dashboard and landing page, customize your brand logo and theme color.
             </p>
           </div>
 
@@ -1065,7 +1054,7 @@ export default function SettingsPage() {
             </div>
 
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Customize the primary accent color of your registration portal and member interface.
+              Customize the primary accent color across your dashboard, member portal, and buttons.
             </p>
 
             <div className="space-y-3">
@@ -1086,7 +1075,7 @@ export default function SettingsPage() {
                   <button
                     key={color.hex}
                     type="button"
-                    onClick={() => setBrandColor(color.hex)}
+                    onClick={() => handleBrandColorChange(color.hex)}
                     className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition min-h-[44px] ${
                       brandColor === color.hex
                         ? 'border-zinc-900 bg-zinc-100 text-zinc-900 dark:border-white dark:bg-zinc-800 dark:text-white ring-2 ring-zinc-900 dark:ring-white ring-offset-1'
@@ -1107,13 +1096,13 @@ export default function SettingsPage() {
                   <input
                     type="color"
                     value={brandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
+                    onChange={(e) => handleBrandColorChange(e.target.value)}
                     className="h-9 w-9 cursor-pointer rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent p-0.5"
                   />
                   <input
                     type="text"
                     value={brandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
+                    onChange={(e) => handleBrandColorChange(e.target.value)}
                     className="w-28 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-mono uppercase text-zinc-900 dark:text-zinc-100 focus:outline-none min-h-[44px]"
                   />
                 </div>
@@ -1121,7 +1110,7 @@ export default function SettingsPage() {
                   className="rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm flex items-center min-h-[44px]"
                   style={{ backgroundColor: brandColor }}
                 >
-                  Live Button Preview
+                  Live Accent Preview
                 </div>
               </div>
             </div>
@@ -1143,88 +1132,28 @@ export default function SettingsPage() {
               )}
               <div className="flex-1">
                 <span className="font-semibold block mb-0.5">
-                  {domainVerifyResult.success ? 'Domain Status: Connected' : 'Verification Warning'}
+                  {domainVerifyResult.success ? 'Domain Status: Connected' : 'Verification Status'}
                 </span>
                 <span>{domainVerifyResult.message}</span>
               </div>
             </div>
           )}
 
-          {/* Tier 1: Free Branded Subdomain (Default) */}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-4 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-                  <Globe className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                    Tier 1: Free Branded Subdomain
-                    <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
-                      Default &bull; Active
-                    </span>
-                  </h3>
-                </div>
-              </div>
-              <span className="text-[11px] text-zinc-400">Zero DNS setup &bull; Free forever</span>
-            </div>
-
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Every gym on Gymora automatically gets an instantly live, SSL-secured branded web address. Share this link on your Instagram bio, WhatsApp, or Google Business profile.
-            </p>
-
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-mono font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                  https://{slug || 'your-gym'}.gymora.swadyum.store
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleCopySubdomain(`https://${slug || 'your-gym'}.gymora.swadyum.store`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition min-h-[44px]"
-                >
-                  {copiedSubdomain ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-600" />
-                      <span className="text-emerald-600">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>Copy Address</span>
-                    </>
-                  )}
-                </button>
-                <a
-                  href={`/join/${slug || 'demo-gym'}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition min-h-[44px]"
-                >
-                  <span>Preview</span>
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Tier 2: Custom Gym Domain */}
+          {/* Custom Domains Integration (Dashboard Domain + Landing Page Domain) */}
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-5 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-                  <Sparkles className="h-4 w-4" />
+                  <Globe className="h-4 w-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                    Tier 2: Custom Gym Domain
+                    Connect Your Own Domains
                     {isDomainVerified ? (
                       <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide flex items-center gap-1">
                         <Check className="h-2.5 w-2.5" /> Connected
                       </span>
-                    ) : customDomain ? (
+                    ) : (landingDomain || dashboardDomain) ? (
                       <span className="rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
                         DNS Pending
                       </span>
@@ -1236,65 +1165,81 @@ export default function SettingsPage() {
                   </h3>
                 </div>
               </div>
-              <span className="text-[11px] text-zinc-400">100% White-Label on your website</span>
+              <span className="text-[11px] text-zinc-400">White-label host on your own domain</span>
             </div>
 
             <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Connect your own domain or subdomain (for example: <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-[11px]">portal.ironpulsefitness.com</code> or <code className="px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-[11px]">members.mygym.in</code>). Members will only see your brand URL with zero Gymora branding.
+              Set up dedicated domains for your admin dashboard and public QR registration. If no custom domain is connected, your gym is automatically accessible at <strong className="text-zinc-900 dark:text-zinc-100">{defaultPlatformUrl}</strong>.
             </p>
 
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Your Custom Domain / Subdomain
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Dashboard Domain (Owner Portal)
+                </label>
                 <input
                   type="text"
-                  value={customDomain}
-                  onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/^(https?:\/\/)/, '').replace(/\/.*$/, '').trim())}
-                  placeholder="e.g. portal.mygym.com or gym.mybrand.in"
-                  className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                  value={dashboardDomain}
+                  onChange={(e) => setDashboardDomain(e.target.value.toLowerCase().replace(/^(https?:\/\/)/, '').replace(/\/.*$/, '').trim())}
+                  placeholder="e.g. admin.mygym.com"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
                 />
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleVerifyDns}
-                    disabled={isVerifyingDomain || !customDomain.trim()}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 min-h-[44px]"
-                  >
-                    {isVerifyingDomain ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Checking DNS...</span>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span>Verify DNS</span>
-                      </>
-                    )}
-                  </button>
-
-                  {customDomain && (
-                    <button
-                      type="button"
-                      onClick={handleDisconnectDomain}
-                      className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-3 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition min-h-[44px]"
-                    >
-                      Disconnect
-                    </button>
-                  )}
-                </div>
+                <span className="text-[11px] text-zinc-400 mt-1 block">Where you manage your gym</span>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Landing Page / Join Domain (Public QR)
+                </label>
+                <input
+                  type="text"
+                  value={landingDomain}
+                  onChange={(e) => setLandingDomain(e.target.value.toLowerCase().replace(/^(https?:\/\/)/, '').replace(/\/.*$/, '').trim())}
+                  placeholder="e.g. join.mygym.com or mygym.in"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                />
+                <span className="text-[11px] text-zinc-400 mt-1 block">Where walk-in members register</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleVerifyDns}
+                disabled={isVerifyingDomain || (!landingDomain.trim() && !dashboardDomain.trim())}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 min-h-[44px]"
+              >
+                {isVerifyingDomain ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Checking DNS...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>Verify DNS</span>
+                  </>
+                )}
+              </button>
+
+              {(landingDomain || dashboardDomain) && (
+                <button
+                  type="button"
+                  onClick={handleDisconnectDomain}
+                  className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-3 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition min-h-[44px]"
+                >
+                  Disconnect
+                </button>
+              )}
             </div>
 
             {/* DNS Instructions Box */}
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/80 p-4 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                DNS Configuration Steps
+                DNS Configuration Table
               </h4>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Log into your domain registrar (GoDaddy, Namecheap, Cloudflare, Hostinger, etc.) and create this DNS record:
+                Log into your domain provider (GoDaddy, Namecheap, Cloudflare, Hostinger, etc.) and add the corresponding record:
               </p>
 
               <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
@@ -1302,32 +1247,66 @@ export default function SettingsPage() {
                   <thead className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400">
                     <tr>
                       <th className="px-3 py-2 font-semibold">Type</th>
-                      <th className="px-3 py-2 font-semibold">Name / Host</th>
+                      <th className="px-3 py-2 font-semibold">Host / Subdomain</th>
                       <th className="px-3 py-2 font-semibold">Points To / Target</th>
                       <th className="px-3 py-2 font-semibold">TTL</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 font-mono text-[11px] text-zinc-900 dark:text-zinc-100">
+                    {dashboardDomain && (
+                      <tr>
+                        <td className="px-3 py-2 font-bold text-blue-600 dark:text-blue-400">CNAME</td>
+                        <td className="px-3 py-2 font-semibold">{dashboardDomain.split('.')[0]}</td>
+                        <td className="px-3 py-2 flex items-center justify-between gap-2">
+                          <span>gymora.swadyum.store</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCustomDomain('gymora.swadyum.store')}
+                            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1"
+                          >
+                            {copiedCustomDomain ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-500">Auto / 3600</td>
+                      </tr>
+                    )}
+                    {landingDomain && (
+                      <tr>
+                        <td className="px-3 py-2 font-bold text-blue-600 dark:text-blue-400">CNAME</td>
+                        <td className="px-3 py-2 font-semibold">{landingDomain.split('.')[0]}</td>
+                        <td className="px-3 py-2 flex items-center justify-between gap-2">
+                          <span>gymora.swadyum.store</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCustomDomain('gymora.swadyum.store')}
+                            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1"
+                          >
+                            {copiedCustomDomain ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-500">Auto / 3600</td>
+                      </tr>
+                    )}
+                    {!dashboardDomain && !landingDomain && (
+                      <tr>
+                        <td className="px-3 py-2 font-bold text-blue-600 dark:text-blue-400">CNAME</td>
+                        <td className="px-3 py-2">portal (or @)</td>
+                        <td className="px-3 py-2 flex items-center justify-between gap-2">
+                          <span>gymora.swadyum.store</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCustomDomain('gymora.swadyum.store')}
+                            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1"
+                          >
+                            {copiedCustomDomain ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-500">Auto / 3600</td>
+                      </tr>
+                    )}
                     <tr>
-                      <td className="px-3 py-2 font-bold text-blue-600 dark:text-blue-400">CNAME</td>
-                      <td className="px-3 py-2">
-                        {customDomain ? (customDomain.split('.')[0] || 'portal') : 'portal'}
-                      </td>
-                      <td className="px-3 py-2 flex items-center justify-between gap-2">
-                        <span>gymora.swadyum.store</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyCustomDomain('gymora.swadyum.store')}
-                          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1"
-                        >
-                          {copiedCustomDomain ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 text-zinc-500">Auto / 3600</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 font-bold text-zinc-500">A (Alternative)</td>
-                      <td className="px-3 py-2">@ or root domain</td>
+                      <td className="px-3 py-2 font-bold text-zinc-500">A (Fallback)</td>
+                      <td className="px-3 py-2">@ (root)</td>
                       <td className="px-3 py-2">77.37.54.103</td>
                       <td className="px-3 py-2 text-zinc-500">Auto / 3600</td>
                     </tr>
@@ -1336,7 +1315,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/60 p-2.5 text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                <strong>Note:</strong> DNS changes typically propagate within 2 to 15 minutes. Once DNS propagates, click &ldquo;Verify DNS&rdquo; above and hit &ldquo;Save Changes&rdquo;.
+                <strong>Note:</strong> DNS changes propagate worldwide within 2 to 15 minutes. Once DNS propagates, click &ldquo;Verify DNS&rdquo; and &ldquo;Save Changes&rdquo;.
               </div>
             </div>
           </div>

@@ -79,9 +79,6 @@ export default function OnboardingPage() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isParsingExcel, setIsParsingExcel] = useState(false);
-
-  const [isSlugCustomized, setIsSlugCustomized] = useState(false);
-
   // Clean and URL-safe slug formatting
   const cleanSlug = (str: string) => {
     return str
@@ -93,18 +90,10 @@ export default function OnboardingPage() {
       .replace(/^-|-$/g, '');
   };
 
-  // Auto-generate slug from gym name unless manually overridden
   const handleGymNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setGymName(val);
-    if (!isSlugCustomized) {
-      setSlug(cleanSlug(val));
-    }
-  };
-
-  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsSlugCustomized(true);
-    setSlug(cleanSlug(e.target.value));
+    setSlug(cleanSlug(val));
   };
 
   // Plan Management Handlers
@@ -332,47 +321,20 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                      Unique QR Slug *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={slug}
-                      onChange={handleSlugChange}
-                      placeholder="e.g. iron-pulse"
-                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 py-2.5 px-3.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 dark:focus:border-white focus:outline-none transition"
-                    />
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-                      Used for your reception QR code & private gym URL.
-                    </p>
-                  </div>
-
-                  <div>
-                    <LogoUploader
-                      value={logoUrl}
-                      onChange={setLogoUrl}
-                      label="Gym Logo (Upload File)"
-                      description="Upload PNG, JPG, or SVG (phone camera or gallery supported)"
-                    />
-                  </div>
+                <div>
+                  <LogoUploader
+                    value={logoUrl}
+                    onChange={setLogoUrl}
+                    label="Gym Logo (Upload File)"
+                    description="Upload PNG, JPG, or SVG (phone camera or gallery supported)"
+                  />
                 </div>
 
-                <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950/80 p-3.5 text-xs text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Free Branded Domain (Tier 1):</span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold truncate">
-                      {slug ? `${slug}.gymora.swadyum.store` : 'your-gym.gymora.swadyum.store'}
-                    </span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-zinc-200/60 dark:border-zinc-800/60 pt-2">
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">Reception QR Walk-In Page:</span>
-                    <span className="font-mono text-zinc-900 dark:text-zinc-100 font-semibold truncate">
-                      gymora.swadyum.store/join/{slug || 'your-gym'}
-                    </span>
-                  </div>
+                <div className="rounded-xl bg-zinc-50 dark:bg-zinc-950/80 p-3.5 text-xs text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Public QR Registration Link: </span>
+                  <span className="font-mono text-zinc-900 dark:text-zinc-100 font-semibold">
+                    gymora.swadyum.store/join/{slug || 'your-gym'}
+                  </span>
                 </div>
               </div>
 
@@ -380,8 +342,8 @@ export default function OnboardingPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (!gymName.trim() || !phone.trim() || !slug.trim()) {
-                      setError('Please provide Gym Name, Phone, and QR Slug.');
+                    if (!gymName.trim() || !phone.trim()) {
+                      setError('Please provide Gym Name and Official Phone.');
                       return;
                     }
                     setError(null);

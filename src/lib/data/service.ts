@@ -100,9 +100,7 @@ class GymStore {
       this.gyms.find(
         (g) =>
           g.slug.toLowerCase() === clean ||
-          (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean) ||
-          (clean === 'iron-pulse' && g.slug === 'gymora') ||
-          (clean === 'gymora' && g.slug === 'iron-pulse')
+          (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean)
       ) || null
     );
   }
@@ -112,9 +110,7 @@ class GymStore {
     const gym = this.gyms.find(
       (g) =>
         g.slug.toLowerCase() === clean ||
-        (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean) ||
-        (clean === 'iron-pulse' && g.slug === 'gymora') ||
-        (clean === 'gymora' && g.slug === 'iron-pulse')
+        (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean)
     );
     if (!gym) return null;
     const activePlans = this.plans.filter((p) => p.gym_id === gym.id && p.is_active);
@@ -313,6 +309,9 @@ class GymStore {
     if (!plan) throw new Error('Selected plan not found');
 
     const cleanPhone = normalizePhone(params.phone);
+    const existingMember = this.members.find(m => m.gym_id === gym.id && m.phone === cleanPhone);
+    if (existingMember) throw new Error('A member with this phone number already exists in your gym.');
+
     const today = getTodayDateString();
     const startDate = params.start_date || today;
 
@@ -554,26 +553,32 @@ class GymStore {
     if (!gym) {
       gym = this.gyms.find((g) => g.custom_domain && g.custom_domain.toLowerCase().trim() === cleanSlug);
     }
-    // 3. Demo alias fallback
-    if (!gym) {
-      gym = this.gyms.find(
-        (g) =>
-          (cleanSlug === 'iron-pulse' && g.slug === 'gymora') ||
-          (cleanSlug === 'gymora' && g.slug === 'iron-pulse')
-      );
-    }
     if (!gym) throw new Error('Gym not found for slug or domain ' + params.gym_slug);
 
     let plan = this.plans.find((p) => p.id === params.plan_id && p.gym_id === gym!.id && p.is_active);
-    if (!plan) {
-      // Fallback: match by ID or select first active plan of gym
-      plan = this.plans.find((p) => p.id === params.plan_id && p.is_active) ||
-             this.plans.find((p) => p.gym_id === gym!.id && p.is_active);
-    }
-    if (!plan) throw new Error('Active plan not found for this gym');
+    if (!plan) throw new Error('Selected plan is not available for this gym.');
 
     const regId = crypto.randomUUID();
     const cleanPhone = normalizePhone(params.phone);
+    const digitsOnly = cleanPhone.replace(/\D/g, '').slice(-10);
+    if (digitsOnly.length !== 10) throw new Error('Please enter a valid 10-digit phone number.');
+
+    const pendingReg = this.registrations.find(
+      (r) => r.gym_id === gym!.id && r.phone === cleanPhone && r.status === 'pending'
+    );
+    if (pendingReg) throw new Error('You already have a pending registration. Please wait for gym approval.');
+
+    const existingMember = this.members.find(
+      (m) => m.gym_id === gym!.id && m.phone === cleanPhone
+    );
+    if (existingMember) {
+      const latestMembership = this.memberships
+        .filter((m) => m.member_id === existingMember.id)
+        .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))[0];
+      if (latestMembership && latestMembership.lifecycle !== 'cancelled') {
+        throw new Error('You are already a registered member of this gym.');
+      }
+    }
 
     const newReg: RegistrationRequest = {
       id: regId,
@@ -878,23 +883,49 @@ class GymStore {
       }
     }
 
-    const mshipId = crypto.randomUUID();
-    const membership: Membership = {
-      id: mshipId,
-      gym_id: gym.id,
-      member_id: member.id,
-      plan_id: reg.plan_id,
-      plan_name_snapshot: reg.plan_name_snapshot || plan?.name || 'Membership',
-      amount_due: planPrice,
-      start_date: start,
-      due_date: start,
-      end_date: end,
-      status: paymentStatus,
-      lifecycle: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    this.memberships.unshift(membership);
+    let membership: Membership | undefined;
+    
+    // Check for cancelled membership to re-activate
+    const latestMembership = this.memberships
+      .filter((m) => m.member_id === member.id)
+      .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))[0];
+      
+    if (latestMembership && latestMembership.lifecycle === 'cancelled') {
+      latestMembership.lifecycle = 'active';
+      latestMembership.cancelled_at = null;
+      latestMembership.cancellation_reason = null;
+      latestMembership.plan_id = reg.plan_id;
+      latestMembership.plan_name_snapshot = reg.plan_name_snapshot || plan?.name || 'Membership';
+      latestMembership.amount_due = planPrice;
+      latestMembership.start_date = start;
+      latestMembership.due_date = start;
+      latestMembership.end_date = end;
+      latestMembership.status = paymentStatus;
+      latestMembership.updated_at = new Date().toISOString();
+      
+      membership = latestMembership;
+      member.status = 'active';
+      member.updated_at = new Date().toISOString();
+    } else {
+      membership = {
+        id: crypto.randomUUID(),
+        gym_id: gym.id,
+        member_id: member.id,
+        plan_id: reg.plan_id,
+        plan_name_snapshot: reg.plan_name_snapshot || plan?.name || 'Membership',
+        amount_due: planPrice,
+        start_date: start,
+        due_date: start,
+        end_date: end,
+        status: paymentStatus,
+        lifecycle: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.memberships.unshift(membership);
+    }
+    
+    const mshipId = membership.id;
 
     let paymentId: string | undefined = undefined;
     let paymentRecord: Payment | null = null;
@@ -961,6 +992,8 @@ class GymStore {
       },
       domain: {
         custom_domain: gym.custom_domain || null,
+        dashboard_domain: gym.dashboard_domain || null,
+        landing_page_domain: gym.landing_page_domain || gym.custom_domain || null,
         custom_domain_verified: Boolean(gym.custom_domain_verified),
         brand_color: gym.brand_color || '#10b981',
       },
@@ -985,6 +1018,13 @@ class GymStore {
     if (payload.domain) {
       if (payload.domain.custom_domain !== undefined) {
         gym.custom_domain = payload.domain.custom_domain ? payload.domain.custom_domain.toLowerCase().trim() : null;
+      }
+      if (payload.domain.dashboard_domain !== undefined) {
+        gym.dashboard_domain = payload.domain.dashboard_domain ? payload.domain.dashboard_domain.toLowerCase().trim() : null;
+      }
+      if (payload.domain.landing_page_domain !== undefined) {
+        gym.landing_page_domain = payload.domain.landing_page_domain ? payload.domain.landing_page_domain.toLowerCase().trim() : null;
+        if (!gym.custom_domain) gym.custom_domain = gym.landing_page_domain;
       }
       if (payload.domain.custom_domain_verified !== undefined) {
         gym.custom_domain_verified = payload.domain.custom_domain_verified;

@@ -44,6 +44,8 @@ export interface Gym {
   fb_access_token?: string | null;
   whatsapp_business_settings?: Record<string, any> | null;
   custom_domain?: string | null;
+  dashboard_domain?: string | null;
+  landing_page_domain?: string | null;
   custom_domain_verified?: boolean;
   brand_color?: string | null;
   created_at: string;
@@ -232,6 +234,8 @@ export interface SettingsPayload {
   };
   domain?: {
     custom_domain?: string | null;
+    dashboard_domain?: string | null;
+    landing_page_domain?: string | null;
     custom_domain_verified?: boolean;
     brand_color?: string | null;
   };

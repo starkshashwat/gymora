@@ -17,9 +17,9 @@ describe('Multi-Tenancy Security & Real-Time QR Registration Suite', () => {
 
   describe('Multi-Tenancy Subdomain Hijack Protection', () => {
     const gymA = gymService.onboardGymOwner({
-      gym_name: 'Iron Pulse Fitness',
+      gym_name: 'Iron Pulse Hub',
       phone: '9888811111',
-      slug: 'iron-pulse',
+      slug: 'iron-pulse-hub',
       plans: [],
     });
 
@@ -46,7 +46,7 @@ describe('Multi-Tenancy Security & Real-Time QR Registration Suite', () => {
     it('allows authenticated owner accessing their own gym subdomain', async () => {
       const req = new NextRequest('http://localhost:3000/dashboard', {
         headers: {
-          host: 'iron-pulse.gymora.swadyum.store',
+          host: 'iron-pulse-hub.gymora.swadyum.store',
         },
       });
 

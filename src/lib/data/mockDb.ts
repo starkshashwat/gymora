@@ -27,8 +27,8 @@ function addDaysISO(days: number, hour = 11, minute = 30): string {
 
 export const initialGym: Gym = {
   id: 'gym-gymora-01',
-  name: 'Gymora',
-  slug: 'gymora',
+  name: 'Iron Pulse Fitness',
+  slug: 'iron-pulse',
   phone: '+91 98765 43210',
   email: 'owner@gymora.fit',
   address: '42 Fitness Boulevard, Bandra West, Mumbai',

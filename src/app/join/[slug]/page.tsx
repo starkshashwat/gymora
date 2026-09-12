@@ -55,6 +55,9 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
           return;
         }
         setGym(data.gym);
+        if (data.gym.brand_color) {
+          document.documentElement.style.setProperty('--brand-color', data.gym.brand_color);
+        }
         setPlans(data.plans || []);
         if (data.plans && data.plans.length > 0) {
           setSelectedPlanId(data.plans[0].id);

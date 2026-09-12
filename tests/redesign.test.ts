@@ -172,4 +172,74 @@ describe('Redesign Architecture: Lifecycle, Registration Approval & Settings', (
     const autoCancelled = gymService.checkAndApplyAutoCancellation('gym-demo-01');
     expect(autoCancelled).toBeDefined();
   });
+
+  it('prevents duplicate registration when a pending registration exists with same phone', () => {
+    // First registration
+    const reg1 = gymService.createRegistrationRequest({
+      gym_slug: 'iron-pulse',
+      full_name: 'Sameer Khan',
+      phone: '9820011223',
+      plan_id: 'plan-monthly-01',
+    });
+    expect(reg1.success).toBe(true);
+
+    // Second registration with same phone must be rejected
+    expect(() => {
+      gymService.createRegistrationRequest({
+        gym_slug: 'iron-pulse',
+        full_name: 'Sameer Khan Duplicate',
+        phone: '9820011223',
+        plan_id: 'plan-monthly-01',
+      });
+    }).toThrow('You already have a pending registration');
+  });
+
+  it('prevents duplicate member creation in addMember with identical phone', () => {
+    // Add first member
+    gymService.addMember({
+      full_name: 'Deepak Joshi',
+      phone: '9811122233',
+      plan_id: 'plan-monthly-01',
+    });
+
+    // Try adding again with same phone
+    expect(() => {
+      gymService.addMember({
+        full_name: 'Deepak Joshi Duplicate',
+        phone: '9811122233',
+        plan_id: 'plan-monthly-01',
+      });
+    }).toThrow('A member with this phone number already exists');
+  });
+
+  it('allows cancelled member to re-register via QR and reactivates on approval', () => {
+    // 1. Add member and then cancel
+    const member = gymService.addMember({
+      full_name: 'Kavita Roy',
+      phone: '9833344455',
+      plan_id: 'plan-monthly-01',
+    });
+    const mshipId = member.membership!.id;
+    gymService.cancelMembership(mshipId, 'User relocated', member.gym_id);
+
+    // 2. Re-register via QR (should be allowed because lifecycle is cancelled)
+    const rejoinReg = gymService.createRegistrationRequest({
+      gym_slug: 'iron-pulse',
+      full_name: 'Kavita Roy',
+      phone: '9833344455',
+      plan_id: 'plan-monthly-01',
+    });
+    expect(rejoinReg.success).toBe(true);
+
+    // 3. Approve re-join with payment
+    const rejoinApproval = gymService.approveRegistrationWithPayment({
+      registration_id: rejoinReg.registration_id,
+      payment_received: true,
+      amount_received: 1500,
+      payment_method: 'cash',
+      gym_id: member.gym_id,
+    });
+    expect(rejoinApproval.success).toBe(true);
+    expect(rejoinApproval.membership.lifecycle).toBe('active');
+  });
 });

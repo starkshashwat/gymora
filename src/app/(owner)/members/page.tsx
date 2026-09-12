@@ -227,112 +227,70 @@ export default function MembersPage() {
     }
   };
 
-  const getLifecycleBadge = (lifecycle?: MembershipLifecycle) => {
-    switch (lifecycle) {
-      case 'active':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Active
-          </span>
-        );
-      case 'paused':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-            <Pause className="h-3 w-3" />
-            Paused
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800">
-            <Ban className="h-3 w-3" />
-            Cancelled
-          </span>
-        );
-      case 'expired':
-        return (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
-            Expired
-          </span>
-        );
-      default:
-        return (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
-            Active
-          </span>
-        );
-    }
-  };
-
-  const getPaymentStatusBadge = (m: MemberWithDetails) => {
+  const getSmartStatusBadge = (m: MemberWithDetails) => {
     const mship = m.membership;
-    if (!mship) {
+    const lifecycle = mship?.lifecycle || 'active';
+
+    if (lifecycle === 'cancelled') {
       return (
-        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-          No Plan
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800">
+          <Ban className="h-3 w-3" />
+          Cancelled
         </span>
       );
     }
 
-    if (mship.outstanding_balance === 0) {
+    if (lifecycle === 'paused') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-          <span>Paid</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+          <Pause className="h-3 w-3" />
+          Paused
+        </span>
+      );
+    }
+
+    if (!mship) {
+      return (
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+          No Plan
         </span>
       );
     }
 
     if (mship.is_overdue) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">
-          <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-          <span>{mship.days_overdue}d Overdue</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800">
+          <AlertCircle className="h-3 w-3 text-rose-600" />
+          <span>Overdue</span>
         </span>
       );
     }
 
-    if (mship.status === 'partial') {
+    const isDueWithin7 = isExpiringSoon(mship.end_date, 7) || isExpiringSoon(mship.due_date, 7);
+    if (isDueWithin7 || mship.status === 'partial') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-          <Clock className="h-3.5 w-3.5 text-amber-600" />
-          <span>Partial Due</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+          <Clock className="h-3 w-3 text-amber-600" />
+          <span>Due</span>
         </span>
       );
     }
 
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-        <Clock className="h-3.5 w-3.5 text-amber-600" />
-        <span>Due</span>
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <span>Active</span>
       </span>
     );
   };
 
-  const getPaymentMethodIcon = (method: string | null) => {
-    switch (method) {
-      case 'upi':
-        return (
-          <span title="Last payment via UPI">
-            <Smartphone className="h-3 w-3 text-emerald-600" />
-          </span>
-        );
-      case 'cash':
-        return (
-          <span title="Last payment via Cash">
-            <Banknote className="h-3 w-3 text-amber-600" />
-          </span>
-        );
-      case 'online':
-        return (
-          <span title="Last payment via Online Gateway">
-            <CreditCard className="h-3 w-3 text-blue-600" />
-          </span>
-        );
-      default:
-        return null;
+  const getPlanShortcode = (planName?: string | null): string => {
+    if (!planName) return '--';
+    const words = planName.trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
     }
+    return planName.slice(0, 2).toUpperCase();
   };
 
   return (
@@ -559,46 +517,34 @@ export default function MembersPage() {
                         >
                           {m.full_name}
                         </Link>
-                        {getLifecycleBadge(lifecycle)}
-                        {getPaymentStatusBadge(m)}
-                        {m.whatsapp_opt_in && (
-                          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
-                            WA Opted-in
+                        {getSmartStatusBadge(m)}
+                        {mship?.plan_name_snapshot && (
+                          <span
+                            className="rounded-md bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[11px] font-mono font-bold text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
+                            title={mship.plan_name_snapshot}
+                          >
+                            {getPlanShortcode(mship.plan_name_snapshot)}
                           </span>
                         )}
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 font-medium">
                         <span>{m.phone}</span>
-                        {m.email && <span>• {m.email}</span>}
-                        <span>• Plan: <strong className="text-slate-700">{mship?.plan_name_snapshot || 'None'}</strong></span>
-                        <span>• Member Since: {formatDisplayDate(m.joined_at)}</span>
                         {mship?.due_date && (
                           <span>
                             • Due: <strong className={mship.is_overdue ? 'text-rose-600' : 'text-slate-700'}>{formatDisplayDate(mship.due_date)}</strong>
                           </span>
                         )}
-                        {m.last_payment_method && (
-                          <span className="inline-flex items-center gap-1">
-                            • Last: {getPaymentMethodIcon(m.last_payment_method)}
-                            <span className="uppercase text-[11px]">{m.last_payment_method}</span>
-                          </span>
-                        )}
+                        <span>• Member Since: {formatDisplayDate(m.joined_at)}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Financial amounts & Actions */}
+                  {/* Actions */}
                   <div
-                    className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100"
+                    className="flex items-center justify-end gap-2 sm:gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="text-left md:text-right mr-2 hidden sm:block">
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Outstanding</div>
-                      <div className={`text-base font-black ${hasOutstanding ? (mship?.is_overdue ? 'text-rose-600' : 'text-amber-600') : 'text-emerald-600'}`}>
-                        {formatINR(mship?.outstanding_balance || 0)}
-                      </div>
-                    </div>
 
                     <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                       {/* Call Action Button */}
