@@ -120,6 +120,24 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        if (body.domain) {
+          if (body.domain.custom_domain !== undefined) {
+            updatePayload.custom_domain = body.domain.custom_domain
+              ? body.domain.custom_domain
+                  .toLowerCase()
+                  .replace(/^https?:\/\//, '')
+                  .replace(/\/.*$/, '')
+                  .trim()
+              : null;
+          }
+          if (body.domain.custom_domain_verified !== undefined) {
+            updatePayload.custom_domain_verified = body.domain.custom_domain_verified;
+          }
+          if (body.domain.brand_color !== undefined) {
+            updatePayload.brand_color = body.domain.brand_color || '#10b981';
+          }
+        }
+
         await supabase.from('gyms').update(updatePayload).eq('id', gymId);
       } catch (dbErr) {
         console.warn('Supabase settings update warning:', dbErr);

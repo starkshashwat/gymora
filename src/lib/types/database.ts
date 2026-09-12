@@ -43,6 +43,9 @@ export interface Gym {
   fb_phone_number_id?: string | null;
   fb_access_token?: string | null;
   whatsapp_business_settings?: Record<string, any> | null;
+  custom_domain?: string | null;
+  custom_domain_verified?: boolean;
+  brand_color?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -225,6 +228,11 @@ export interface SettingsPayload {
   };
   rules?: {
     auto_cancel_overdue_days?: number | null;
+  };
+  domain?: {
+    custom_domain?: string | null;
+    custom_domain_verified?: boolean;
+    brand_color?: string | null;
   };
 }
 

@@ -70,6 +70,9 @@ class GymStore {
         fb_waba_id: null,
         fb_phone_number_id: null,
         fb_access_token: null,
+        custom_domain: null,
+        custom_domain_verified: false,
+        brand_color: '#10b981',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -80,12 +83,24 @@ class GymStore {
     return this.gyms[0];
   }
 
+  getGymByCustomDomain(domain: string): Gym | null {
+    if (!domain) return null;
+    const clean = domain.split(':')[0].toLowerCase().trim();
+    return (
+      this.gyms.find(
+        (g) => g.custom_domain && g.custom_domain.toLowerCase().trim() === clean
+      ) || null
+    );
+  }
+
   getPublicGymBySlug(slug: string): { gym: Gym; plans: MembershipPlan[] } | null {
+    const clean = slug.split(':')[0].toLowerCase().trim();
     const gym = this.gyms.find(
       (g) =>
-        g.slug === slug ||
-        (slug === 'iron-pulse' && g.slug === 'gymora') ||
-        (slug === 'gymora' && g.slug === 'iron-pulse')
+        g.slug.toLowerCase() === clean ||
+        (g.custom_domain && g.custom_domain.toLowerCase().trim() === clean) ||
+        (clean === 'iron-pulse' && g.slug === 'gymora') ||
+        (clean === 'gymora' && g.slug === 'iron-pulse')
     );
     if (!gym) return null;
     const activePlans = this.plans.filter((p) => p.gym_id === gym.id && p.is_active);
@@ -518,13 +533,15 @@ class GymStore {
     plan_id: string;
     whatsapp_opt_in?: boolean;
   }): { success: boolean; registration_id: string; gym_name: string; plan_name: string; price: number } {
+    const cleanSlug = params.gym_slug.toLowerCase().trim();
     const gym = this.gyms.find(
       (g) =>
-        g.slug === params.gym_slug ||
-        (params.gym_slug === 'iron-pulse' && g.slug === 'gymora') ||
-        (params.gym_slug === 'gymora' && g.slug === 'iron-pulse')
+        g.slug.toLowerCase() === cleanSlug ||
+        (g.custom_domain && g.custom_domain.toLowerCase().trim() === cleanSlug) ||
+        (cleanSlug === 'iron-pulse' && g.slug === 'gymora') ||
+        (cleanSlug === 'gymora' && g.slug === 'iron-pulse')
     );
-    if (!gym) throw new Error('Gym not found for slug ' + params.gym_slug);
+    if (!gym) throw new Error('Gym not found for slug or domain ' + params.gym_slug);
 
     const plan = this.plans.find((p) => p.id === params.plan_id && p.gym_id === gym.id && p.is_active);
     if (!plan) throw new Error('Active plan not found for this gym');
@@ -916,10 +933,17 @@ class GymStore {
       rules: {
         auto_cancel_overdue_days: gym.auto_cancel_overdue_days || null,
       },
+      domain: {
+        custom_domain: gym.custom_domain || null,
+        custom_domain_verified: Boolean(gym.custom_domain_verified),
+        brand_color: gym.brand_color || '#10b981',
+      },
     };
   }
 
-  updateSettings(gymId: string, payload: SettingsPayload): Gym {
+  updateSettings(gymIdOrPayload: string | SettingsPayload, maybePayload?: SettingsPayload): Gym {
+    const gymId = typeof gymIdOrPayload === 'string' ? gymIdOrPayload : 'gym-demo-01';
+    const payload = typeof gymIdOrPayload === 'object' && gymIdOrPayload !== null ? gymIdOrPayload : (maybePayload || {});
     const gym = this.getGym(gymId);
     if (payload.general) {
       if (payload.general.name) gym.name = payload.general.name.trim();
@@ -929,6 +953,18 @@ class GymStore {
       if (payload.general.logo_url !== undefined) gym.logo_url = payload.general.logo_url || null;
       if (payload.general.slug) {
         gym.slug = payload.general.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      }
+    }
+
+    if (payload.domain) {
+      if (payload.domain.custom_domain !== undefined) {
+        gym.custom_domain = payload.domain.custom_domain ? payload.domain.custom_domain.toLowerCase().trim() : null;
+      }
+      if (payload.domain.custom_domain_verified !== undefined) {
+        gym.custom_domain_verified = payload.domain.custom_domain_verified;
+      }
+      if (payload.domain.brand_color !== undefined) {
+        gym.brand_color = payload.domain.brand_color || '#10b981';
       }
     }
 

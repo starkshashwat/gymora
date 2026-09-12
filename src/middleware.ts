@@ -80,20 +80,46 @@ export function getSubdomain(host: string): string | null {
   return null;
 }
 
+export function isCustomDomain(host: string): boolean {
+  if (!host) return false;
+  const hostname = host.split(':')[0].toLowerCase();
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(hostname)
+  ) {
+    return false;
+  }
+  if (
+    hostname === 'gymora.fit' ||
+    hostname.endsWith('.gymora.fit') ||
+    hostname === 'gymora.swadyum.store' ||
+    hostname.endsWith('.gymora.swadyum.store') ||
+    hostname === 'swadyum.store' ||
+    hostname === 'www.swadyum.store'
+  ) {
+    return false;
+  }
+  return hostname.includes('.');
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
 
   // -------------------------------------------------------------
-  // 1. Subdomain Resolution & Rewriting
+  // 1. Subdomain Resolution & Custom Domain Rewriting
   // -------------------------------------------------------------
   const subdomain = getSubdomain(host);
-  if (subdomain) {
-    // If visitor lands on [gymSlug].localhost:3000 or [gymSlug].gymora.fit
-    // Root or /join routes get rewritten directly to customer onboarding /join/[gymSlug]
+  const isCustom = isCustomDomain(host);
+
+  if (subdomain || isCustom) {
+    const slugOrDomain = subdomain || host.split(':')[0].toLowerCase();
+    // If visitor lands on [gymSlug].localhost:3000 or custom domain (e.g. portal.mygym.com)
+    // Root or /join routes get rewritten directly to customer onboarding /join/[slugOrDomain]
     if (pathname === '/' || pathname === '/join') {
       const url = request.nextUrl.clone();
-      url.pathname = `/join/${subdomain}`;
+      url.pathname = `/join/${slugOrDomain}`;
       return NextResponse.rewrite(url);
     }
   }

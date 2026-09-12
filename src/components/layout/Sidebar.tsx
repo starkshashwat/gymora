@@ -24,6 +24,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [gymInfo, setGymInfo] = useState<{ name: string; logoUrl?: string | null }>({ name: 'Gymora' });
+
+  const fetchGymInfo = async () => {
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (data.success && data.settings?.general) {
+        setGymInfo({
+          name: data.settings.general.name || 'Gymora',
+          logoUrl: data.settings.general.logo_url || null,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSignOut = async () => {
     try {
@@ -50,6 +66,7 @@ export default function Sidebar() {
   };
 
   useEffect(() => {
+    fetchGymInfo();
     fetchPendingCount();
     const interval = setInterval(fetchPendingCount, 4000);
 
@@ -66,12 +83,14 @@ export default function Sidebar() {
     };
     window.addEventListener('storage', handleStorage);
     window.addEventListener('gym:member-updated', fetchPendingCount);
+    window.addEventListener('gym:settings-updated', fetchGymInfo);
 
     return () => {
       clearInterval(interval);
       if (bc) bc.close();
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('gym:member-updated', fetchPendingCount);
+      window.removeEventListener('gym:settings-updated', fetchGymInfo);
     };
   }, []);
 
@@ -117,11 +136,21 @@ export default function Sidebar() {
   const DesktopSidebar = (
     <aside className="hidden md:flex flex-col w-64 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 min-h-screen fixed left-0 top-0">
       <div className="h-16 flex items-center px-6">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
-            <Dumbbell className="h-4 w-4" />
-          </div>
-          <span className="font-bold text-zinc-900 dark:text-zinc-50 tracking-tight text-lg">Gymora</span>
+        <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+          {gymInfo.logoUrl ? (
+            <img
+              src={gymInfo.logoUrl}
+              alt={gymInfo.name}
+              className="h-8 w-8 rounded-lg object-contain border border-zinc-200 dark:border-zinc-800 bg-white shrink-0"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shrink-0">
+              <Dumbbell className="h-4 w-4" />
+            </div>
+          )}
+          <span className="font-bold text-zinc-900 dark:text-zinc-50 tracking-tight text-base sm:text-lg truncate">
+            {gymInfo.name}
+          </span>
         </Link>
       </div>
 
@@ -178,11 +207,21 @@ export default function Sidebar() {
   const MobileHeader = (
     <header className="md:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md">
       <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900">
-            <Dumbbell className="h-3.5 w-3.5" />
-          </div>
-          <span className="font-bold text-zinc-900 dark:text-zinc-50 tracking-tight text-lg">Gymora</span>
+        <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+          {gymInfo.logoUrl ? (
+            <img
+              src={gymInfo.logoUrl}
+              alt={gymInfo.name}
+              className="h-7 w-7 rounded-lg object-contain border border-zinc-200 dark:border-zinc-800 bg-white shrink-0"
+            />
+          ) : (
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shrink-0">
+              <Dumbbell className="h-3.5 w-3.5" />
+            </div>
+          )}
+          <span className="font-bold text-zinc-900 dark:text-zinc-50 tracking-tight text-base sm:text-lg truncate max-w-[180px]">
+            {gymInfo.name}
+          </span>
         </Link>
         <div className="flex items-center gap-2">
           {pendingCount > 0 && (

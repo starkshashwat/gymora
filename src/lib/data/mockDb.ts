@@ -26,6 +26,9 @@ export const initialGym: Gym = {
   email: 'owner@gymora.fit',
   address: '42 Fitness Boulevard, Bandra West, Mumbai',
   logo_url: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=80',
+  custom_domain: null,
+  custom_domain_verified: false,
+  brand_color: '#10b981',
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
