@@ -125,4 +125,38 @@ describe('Middleware Subdomain Resolution & Security Routing', () => {
       expect(target).toBe('/members');
     });
   });
+
+  describe('Reverse Proxy Public Origin Resolution', () => {
+    it('resolves external domain from x-forwarded-host and proto behind Coolify/Traefik', async () => {
+      const { getPublicOrigin } = await import('../src/lib/utils/url');
+      const req = new Request('http://localhost:3000/demo', {
+        headers: {
+          'x-forwarded-host': 'mygym.coolify.site',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      expect(getPublicOrigin(req)).toBe('https://mygym.coolify.site');
+    });
+
+    it('handles multiple forwarded hosts from proxy chains', async () => {
+      const { getPublicOrigin } = await import('../src/lib/utils/url');
+      const req = new Request('http://127.0.0.1:3000/auth/callback', {
+        headers: {
+          'x-forwarded-host': 'gymora.com, 10.0.0.1',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      expect(getPublicOrigin(req)).toBe('https://gymora.com');
+    });
+
+    it('falls back to standard host for local dev', async () => {
+      const { getPublicOrigin } = await import('../src/lib/utils/url');
+      const req = new Request('http://localhost:3000/dashboard', {
+        headers: {
+          host: 'localhost:3000',
+        },
+      });
+      expect(getPublicOrigin(req)).toBe('http://localhost:3000');
+    });
+  });
 });

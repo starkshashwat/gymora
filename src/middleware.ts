@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getPublicOrigin } from '@/lib/utils/url';
 
 /**
  * Extracts gym slug subdomain from the incoming Host header.
@@ -53,6 +54,22 @@ export async function middleware(request: NextRequest) {
       url.pathname = `/join/${subdomain}`;
       return NextResponse.rewrite(url);
     }
+  }
+
+  // -------------------------------------------------------------
+  // 1.5. Auth Code Interception (e.g. Supabase OAuth / Magic Link)
+  // If Supabase redirects with ?code= to root or any page, route to /auth/callback
+  // -------------------------------------------------------------
+  const authCode = request.nextUrl.searchParams.get('code');
+  if (authCode && !pathname.startsWith('/auth/callback')) {
+    const origin = getPublicOrigin(request);
+    const callbackUrl = new URL('/auth/callback', origin);
+    callbackUrl.searchParams.set('code', authCode);
+    const nextParam = request.nextUrl.searchParams.get('next');
+    if (nextParam) {
+      callbackUrl.searchParams.set('next', nextParam);
+    }
+    return NextResponse.redirect(callbackUrl);
   }
 
   // -------------------------------------------------------------
@@ -139,7 +156,8 @@ export async function middleware(request: NextRequest) {
   // 4. Route Enforcement & Redirection
   // -------------------------------------------------------------
   if (isProtectedRoute && !canAccessDashboard) {
-    const loginUrl = new URL('/login', request.url);
+    const origin = getPublicOrigin(request);
+    const loginUrl = new URL('/login', origin);
     loginUrl.searchParams.set('returnUrl', pathname);
     return NextResponse.redirect(loginUrl);
   }
@@ -152,8 +170,9 @@ export async function middleware(request: NextRequest) {
 
   // ONLY redirect away from /login if user is legitimately authenticated with a real account
   if (pathname === '/login' && isActuallyAuthenticated) {
+    const origin = getPublicOrigin(request);
     const returnUrl = request.nextUrl.searchParams.get('returnUrl') || '/dashboard';
-    return NextResponse.redirect(new URL(returnUrl, request.url));
+    return NextResponse.redirect(new URL(returnUrl, origin));
   }
 
   return response;

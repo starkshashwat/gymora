@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getPublicOrigin } from '@/lib/utils/url';
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const dashboardUrl = new URL('/dashboard', url.origin);
+  const origin = getPublicOrigin(request);
+  const dashboardUrl = new URL('/dashboard', origin);
 
   const response = NextResponse.redirect(dashboardUrl);
   

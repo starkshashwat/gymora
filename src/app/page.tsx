@@ -19,8 +19,17 @@ import { AuthModal } from '@/components/ui/auth-modal';
 export default function RootLandingPage() {
   const [isExistingSession, setIsExistingSession] = useState(false);
 
-  // Check if real Supabase auth session exists
+  // Check if real Supabase auth session exists or redirect if code param is present
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        window.location.href = `/auth/callback?code=${encodeURIComponent(code)}`;
+        return;
+      }
+    }
+
     try {
       const supabase = createClient();
       supabase.auth.getSession().then(({ data: { session } }) => {
