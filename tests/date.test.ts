@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isDueToday, isOverdue, getDaysOverdue, getTodayDateString } from '../src/lib/utils/date';
+import {
+  isDueToday,
+  isOverdue,
+  getDaysOverdue,
+  getTodayDateString,
+  formatExactDateTime,
+  formatRelativeDateTime,
+  formatDisplayDate,
+} from '../src/lib/utils/date';
 
 describe('Date & Due Utilities', () => {
   const today = getTodayDateString();
@@ -25,4 +33,35 @@ describe('Date & Due Utilities', () => {
 
     expect(getDaysOverdue(fiveDaysAgo)).toBe(5);
   });
+
+  it('formats exact date and time properly', () => {
+    expect(formatExactDateTime(null)).toBe('—');
+    expect(formatExactDateTime(undefined)).toBe('—');
+    expect(formatExactDateTime('')).toBe('—');
+
+    // Date-only string
+    expect(formatExactDateTime('2026-09-12')).toContain('2026');
+
+    // ISO timestamp with time
+    const isoString = '2026-09-12T16:08:00.000Z';
+    const formatted = formatExactDateTime(isoString);
+    expect(formatted).toContain('·');
+    expect(formatted).toMatch(/(AM|PM)/);
+  });
+
+  it('formats relative date and time properly', () => {
+    const nowIso = new Date().toISOString();
+    const formattedToday = formatRelativeDateTime(nowIso);
+    expect(formattedToday).toContain('Today ·');
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const formattedYesterday = formatRelativeDateTime(yesterday.toISOString());
+    expect(formattedYesterday).toContain('Yesterday ·');
+
+    const pastDate = '2025-01-01T10:00:00.000Z';
+    const formattedPast = formatRelativeDateTime(pastDate);
+    expect(formattedPast).toContain('2025');
+  });
 });
+

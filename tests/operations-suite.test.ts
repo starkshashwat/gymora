@@ -28,7 +28,7 @@ describe('Operations & Gym Management Suite', () => {
       expect(metrics.today_cash_collection).toBeGreaterThanOrEqual(500);
       expect(metrics.today_upi_collection).toBeGreaterThanOrEqual(1200);
       expect(metrics.today_collection).toBe(
-        metrics.today_cash_collection + metrics.today_upi_collection + metrics.today_online_collection
+        (metrics.today_cash_collection || 0) + (metrics.today_upi_collection || 0) + (metrics.today_online_collection || 0)
       );
     });
   });
@@ -62,7 +62,7 @@ describe('Operations & Gym Management Suite', () => {
     });
 
     it('filters members list by expiring_soon', () => {
-      const expiringList = gymService.getMembersWithDetails({ filter: 'expiring_soon' });
+      const expiringList = gymService.getMembersWithDetails(undefined, '', 'expiring_soon');
       expect(Array.isArray(expiringList)).toBe(true);
       expiringList.forEach((m) => {
         expect(m.membership).not.toBeNull();

@@ -38,7 +38,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, isDemoMode, registrations });
+    const members = gymService.getMembersWithDetails(gymId);
+    const enriched = registrations.map((r: any) => {
+      let converted_member_id = r.converted_member_id;
+      if (!converted_member_id && r.status === 'converted') {
+        const found = members.find((m: any) => m.phone === r.phone || (r.email && m.email === r.email));
+        if (found) converted_member_id = found.id;
+      }
+      return {
+        ...r,
+        converted_member_id: converted_member_id || null,
+      };
+    });
+
+    return NextResponse.json({ success: true, isDemoMode, registrations: enriched });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

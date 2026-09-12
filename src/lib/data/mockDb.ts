@@ -18,6 +18,13 @@ function addDays(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function addDaysISO(days: number, hour = 11, minute = 30): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
 export const initialGym: Gym = {
   id: 'gym-gymora-01',
   name: 'Gymora',
@@ -198,9 +205,9 @@ export const initialPayments: Payment[] = [
     amount: 500,
     payment_method: 'upi',
     status: 'paid',
-    paid_at: addDays(-2),
+    paid_at: addDaysISO(-2, 16, 8),
     notes: 'Advance installment via UPI',
-    created_at: addDays(-2),
+    created_at: addDaysISO(-2, 16, 8),
   },
   {
     id: 'pay-02',
@@ -210,9 +217,9 @@ export const initialPayments: Payment[] = [
     amount: 1500,
     payment_method: 'cash',
     status: 'paid',
-    paid_at: addDays(-1),
+    paid_at: addDaysISO(-1, 10, 15),
     notes: 'Full payment cash at reception',
-    created_at: addDays(-1),
+    created_at: addDaysISO(-1, 10, 15),
   },
 ];
 

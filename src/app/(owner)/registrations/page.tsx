@@ -169,10 +169,11 @@ export default function RegistrationsPage() {
 
                   {reg.status === 'converted' ? (
                     <Link
-                      href="/members"
-                      className="rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 transition"
+                      href={reg.converted_member_id ? `/members/${reg.converted_member_id}` : `/members?q=${encodeURIComponent(reg.full_name)}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
                     >
-                      View in Members
+                      <span>View Profile</span>
+                      <ArrowRight className="h-3.5 w-3.5 text-emerald-600" />
                     </Link>
                   ) : (
                     <button

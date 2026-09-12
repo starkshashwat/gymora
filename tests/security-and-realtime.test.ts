@@ -20,6 +20,7 @@ describe('Multi-Tenancy Security & Real-Time QR Registration Suite', () => {
       gym_name: 'Iron Pulse Fitness',
       phone: '9888811111',
       slug: 'iron-pulse',
+      plans: [],
     });
 
     const mockSupabase = {
@@ -60,6 +61,7 @@ describe('Multi-Tenancy Security & Real-Time QR Registration Suite', () => {
         gym_name: 'Metro Beast Fitness',
         phone: '9888877777',
         slug: 'metro-beast',
+        plans: [],
       });
 
       const req = new NextRequest('http://localhost:3000/dashboard', {

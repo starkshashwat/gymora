@@ -1,22 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SettingsPayload, AutomationRule, GatewayProvider, WhatsAppMode } from '@/lib/types/database';
 import {
   Building2,
   CreditCard,
   MessageCircle,
-  Bell,
   ShieldAlert,
   Save,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Smartphone,
   ExternalLink,
   QrCode,
   Sparkles,
-  ChevronRight,
   Clock,
   Globe,
   Copy,
@@ -24,27 +21,53 @@ import {
   RefreshCw,
   Palette,
   ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import LogoUploader from '@/components/ui/LogoUploader';
 
-type SettingsTab = 'general' | 'domain' | 'payments' | 'whatsapp' | 'reminders' | 'rules';
+export type SettingsSection = 'profile' | 'registration' | 'payments' | 'whatsapp' | 'automation' | 'branding';
+
+interface SettingsSnapshot {
+  gymName: string;
+  phone: string;
+  email: string;
+  address: string;
+  slug: string;
+  logoUrl: string;
+  upiId: string;
+  upiQrUrl: string;
+  paymentInstructions: string;
+  isGatewayEnabled: boolean;
+  gatewayProvider: GatewayProvider;
+  gatewayKeyId: string;
+  gatewayKeySecret: string;
+  whatsappMode: WhatsAppMode;
+  fbWabaId: string;
+  fbPhoneNumberId: string;
+  autoCancelDays: number | null;
+  customDomain: string;
+  isDomainVerified: boolean;
+  brandColor: string;
+}
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // General Settings
+  // Group 1: Gym Profile
   const [gymName, setGymName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [slug, setSlug] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
 
-  // Payments Settings
+  // Group 2: Online Registration
+  const [slug, setSlug] = useState('');
+  const [copiedRegistrationUrl, setCopiedRegistrationUrl] = useState(false);
+
+  // Group 3: Payments
   const [upiId, setUpiId] = useState('');
   const [upiQrUrl, setUpiQrUrl] = useState('');
   const [paymentInstructions, setPaymentInstructions] = useState('');
@@ -53,18 +76,17 @@ export default function SettingsPage() {
   const [gatewayKeyId, setGatewayKeyId] = useState('');
   const [gatewayKeySecret, setGatewayKeySecret] = useState('');
 
-  // WhatsApp Settings
+  // Group 4: WhatsApp
   const [whatsappMode, setWhatsappMode] = useState<WhatsAppMode>('local_click_to_chat');
   const [fbWabaId, setFbWabaId] = useState('');
   const [fbPhoneNumberId, setFbPhoneNumberId] = useState('');
 
-  // Membership Rules
+  // Group 5: Automation
   const [autoCancelDays, setAutoCancelDays] = useState<number | null>(null);
-
-  // Automation Rules
   const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
 
-  // Domain & Branding Settings
+  // Group 6: Domain & Branding
+  const [logoUrl, setLogoUrl] = useState('');
   const [customDomain, setCustomDomain] = useState('');
   const [isDomainVerified, setIsDomainVerified] = useState(false);
   const [brandColor, setBrandColor] = useState('#10b981');
@@ -73,6 +95,9 @@ export default function SettingsPage() {
   const [copiedSubdomain, setCopiedSubdomain] = useState(false);
   const [copiedCustomDomain, setCopiedCustomDomain] = useState(false);
 
+  // Initial snapshot to track dirty state
+  const initialSnapshotRef = useRef<SettingsSnapshot | null>(null);
+
   const loadSettings = async () => {
     try {
       setIsLoading(true);
@@ -80,35 +105,76 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success && data.settings) {
         const s: SettingsPayload = data.settings;
-        if (s.general) {
-          setGymName(s.general.name || '');
-          setPhone(s.general.phone || '');
-          setEmail(s.general.email || '');
-          setAddress(s.general.address || '');
-          setSlug(s.general.slug || '');
-          setLogoUrl(s.general.logo_url || '');
-        }
-        if (s.domain) {
-          setCustomDomain(s.domain.custom_domain || '');
-          setIsDomainVerified(!!s.domain.custom_domain_verified);
-          setBrandColor(s.domain.brand_color || '#10b981');
-        }
-        if (s.payments) {
-          setUpiId(s.payments.upi_id || '');
-          setUpiQrUrl(s.payments.upi_qr_url || '');
-          setPaymentInstructions(s.payments.payment_instructions || '');
-          setIsGatewayEnabled(!!s.payments.is_gateway_enabled);
-          setGatewayProvider(s.payments.gateway_provider || 'razorpay');
-          setGatewayKeyId(s.payments.gateway_key_id || '');
-        }
-        if (s.whatsapp) {
-          setWhatsappMode(s.whatsapp.whatsapp_mode || 'local_click_to_chat');
-          setFbWabaId(s.whatsapp.fb_waba_id || '');
-          setFbPhoneNumberId(s.whatsapp.fb_phone_number_id || '');
-        }
-        if (s.rules) {
-          setAutoCancelDays(s.rules.auto_cancel_overdue_days ?? null);
-        }
+        const gName = s.general?.name || '';
+        const gPhone = s.general?.phone || '';
+        const gEmail = s.general?.email || '';
+        const gAddress = s.general?.address || '';
+        const gSlug = s.general?.slug || '';
+        const gLogo = s.general?.logo_url || '';
+
+        const dDomain = s.domain?.custom_domain || '';
+        const dVerified = !!s.domain?.custom_domain_verified;
+        const dColor = s.domain?.brand_color || '#10b981';
+
+        const pUpi = s.payments?.upi_id || '';
+        const pQr = s.payments?.upi_qr_url || '';
+        const pInstructions = s.payments?.payment_instructions || '';
+        const pGatewayEnabled = !!s.payments?.is_gateway_enabled;
+        const pProvider = s.payments?.gateway_provider || 'razorpay';
+        const pKeyId = s.payments?.gateway_key_id || '';
+
+        const wMode = s.whatsapp?.whatsapp_mode || 'local_click_to_chat';
+        const wWaba = s.whatsapp?.fb_waba_id || '';
+        const wPhoneId = s.whatsapp?.fb_phone_number_id || '';
+
+        const rDays = s.rules?.auto_cancel_overdue_days ?? null;
+
+        setGymName(gName);
+        setPhone(gPhone);
+        setEmail(gEmail);
+        setAddress(gAddress);
+        setSlug(gSlug);
+        setLogoUrl(gLogo);
+
+        setCustomDomain(dDomain);
+        setIsDomainVerified(dVerified);
+        setBrandColor(dColor);
+
+        setUpiId(pUpi);
+        setUpiQrUrl(pQr);
+        setPaymentInstructions(pInstructions);
+        setIsGatewayEnabled(pGatewayEnabled);
+        setGatewayProvider(pProvider);
+        setGatewayKeyId(pKeyId);
+
+        setWhatsappMode(wMode);
+        setFbWabaId(wWaba);
+        setFbPhoneNumberId(wPhoneId);
+
+        setAutoCancelDays(rDays);
+
+        initialSnapshotRef.current = {
+          gymName: gName,
+          phone: gPhone,
+          email: gEmail,
+          address: gAddress,
+          slug: gSlug,
+          logoUrl: gLogo,
+          upiId: pUpi,
+          upiQrUrl: pQr,
+          paymentInstructions: pInstructions,
+          isGatewayEnabled: pGatewayEnabled,
+          gatewayProvider: pProvider,
+          gatewayKeyId: pKeyId,
+          gatewayKeySecret: '',
+          whatsappMode: wMode,
+          fbWabaId: wWaba,
+          fbPhoneNumberId: wPhoneId,
+          autoCancelDays: rDays,
+          customDomain: dDomain,
+          isDomainVerified: dVerified,
+          brandColor: dColor,
+        };
       }
       if (data.automationRules) {
         setAutomationRules(data.automationRules);
@@ -123,6 +189,81 @@ export default function SettingsPage() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // Compute dirty status
+  const isDirty = useMemo(() => {
+    if (!initialSnapshotRef.current) return false;
+    const init = initialSnapshotRef.current;
+    return (
+      gymName !== init.gymName ||
+      phone !== init.phone ||
+      email !== init.email ||
+      address !== init.address ||
+      slug !== init.slug ||
+      logoUrl !== init.logoUrl ||
+      upiId !== init.upiId ||
+      upiQrUrl !== init.upiQrUrl ||
+      paymentInstructions !== init.paymentInstructions ||
+      isGatewayEnabled !== init.isGatewayEnabled ||
+      gatewayProvider !== init.gatewayProvider ||
+      gatewayKeyId !== init.gatewayKeyId ||
+      gatewayKeySecret !== init.gatewayKeySecret ||
+      whatsappMode !== init.whatsappMode ||
+      fbWabaId !== init.fbWabaId ||
+      fbPhoneNumberId !== init.fbPhoneNumberId ||
+      autoCancelDays !== init.autoCancelDays ||
+      customDomain !== init.customDomain ||
+      isDomainVerified !== init.isDomainVerified ||
+      brandColor !== init.brandColor
+    );
+  }, [
+    gymName,
+    phone,
+    email,
+    address,
+    slug,
+    logoUrl,
+    upiId,
+    upiQrUrl,
+    paymentInstructions,
+    isGatewayEnabled,
+    gatewayProvider,
+    gatewayKeyId,
+    gatewayKeySecret,
+    whatsappMode,
+    fbWabaId,
+    fbPhoneNumberId,
+    autoCancelDays,
+    customDomain,
+    isDomainVerified,
+    brandColor,
+  ]);
+
+  const handleDiscard = () => {
+    if (!initialSnapshotRef.current) return;
+    const init = initialSnapshotRef.current;
+    setGymName(init.gymName);
+    setPhone(init.phone);
+    setEmail(init.email);
+    setAddress(init.address);
+    setSlug(init.slug);
+    setLogoUrl(init.logoUrl);
+    setUpiId(init.upiId);
+    setUpiQrUrl(init.upiQrUrl);
+    setPaymentInstructions(init.paymentInstructions);
+    setIsGatewayEnabled(init.isGatewayEnabled);
+    setGatewayProvider(init.gatewayProvider);
+    setGatewayKeyId(init.gatewayKeyId);
+    setGatewayKeySecret('');
+    setWhatsappMode(init.whatsappMode);
+    setFbWabaId(init.fbWabaId);
+    setFbPhoneNumberId(init.fbPhoneNumberId);
+    setAutoCancelDays(init.autoCancelDays);
+    setCustomDomain(init.customDomain);
+    setIsDomainVerified(init.isDomainVerified);
+    setBrandColor(init.brandColor);
+    setError(null);
+  };
 
   const handleSaveSettings = async () => {
     try {
@@ -174,6 +315,29 @@ export default function SettingsPage() {
         throw new Error(data.error || 'Failed to save settings');
       }
 
+      initialSnapshotRef.current = {
+        gymName,
+        phone,
+        email,
+        address,
+        slug,
+        logoUrl,
+        upiId,
+        upiQrUrl,
+        paymentInstructions,
+        isGatewayEnabled,
+        gatewayProvider,
+        gatewayKeyId,
+        gatewayKeySecret: '',
+        whatsappMode,
+        fbWabaId,
+        fbPhoneNumberId,
+        autoCancelDays,
+        customDomain,
+        isDomainVerified,
+        brandColor,
+      };
+
       setSaveSuccess(true);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gym:settings-updated'));
@@ -183,6 +347,14 @@ export default function SettingsPage() {
       setError(err.message || 'Error saving settings');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCopyRegistrationUrl = (text: string) => {
+    if (typeof navigator !== 'undefined') {
+      navigator.clipboard.writeText(text);
+      setCopiedRegistrationUrl(true);
+      setTimeout(() => setCopiedRegistrationUrl(false), 2000);
     }
   };
 
@@ -228,7 +400,6 @@ export default function SettingsPage() {
           success: true,
           message: data.message || 'DNS verified successfully! Your custom domain is now live.',
         });
-        // Auto-save the verified state
         await handleSaveSettings();
       } else {
         setIsDomainVerified(false);
@@ -256,13 +427,19 @@ export default function SettingsPage() {
     });
   };
 
-  const tabs = [
-    { id: 'general' as const, label: 'General', icon: Building2 },
-    { id: 'domain' as const, label: 'Domain & Branding', icon: Globe },
-    { id: 'payments' as const, label: 'Payments', icon: CreditCard },
-    { id: 'whatsapp' as const, label: 'WhatsApp', icon: MessageCircle },
-    { id: 'reminders' as const, label: 'Reminders & Automations', icon: Bell },
-    { id: 'rules' as const, label: 'Membership Rules', icon: ShieldAlert },
+  const sections: {
+    id: SettingsSection;
+    label: string;
+    shortLabel: string;
+    icon: React.ElementType;
+    description: string;
+  }[] = [
+    { id: 'profile', label: 'Gym Profile', shortLabel: 'Profile', icon: Building2, description: 'Name, phone, email & address' },
+    { id: 'registration', label: 'Online Registration', shortLabel: 'Registration', icon: QrCode, description: 'Public QR & onboarding link' },
+    { id: 'payments', label: 'Payments', shortLabel: 'Payments', icon: CreditCard, description: 'UPI, QR code & gateway' },
+    { id: 'whatsapp', label: 'WhatsApp', shortLabel: 'WhatsApp', icon: MessageCircle, description: 'Manual click-to-chat & API' },
+    { id: 'automation', label: 'Automation', shortLabel: 'Automation', icon: Clock, description: 'Reminders & cancellation' },
+    { id: 'branding', label: 'Domain & Branding', shortLabel: 'Branding', icon: Globe, description: 'Subdomain, custom domain & logo' },
   ];
 
   if (isLoading) {
@@ -273,8 +450,10 @@ export default function SettingsPage() {
     );
   }
 
+  const registrationUrl = `https://${slug || 'your-gym'}.gymora.swadyum.store/join/${slug || 'demo-gym'}`;
+
   return (
-    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 pb-32">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
         <div>
@@ -286,48 +465,81 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <button
-          onClick={handleSaveSettings}
-          disabled={isSaving}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4" />
-              <span>Save Changes</span>
-            </>
+        <div className="flex items-center gap-3">
+          {isDirty && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              Unsaved changes
+            </span>
           )}
-        </button>
+          <button
+            onClick={handleSaveSettings}
+            disabled={isSaving || !isDirty}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 min-h-[44px]"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                <span>Save Changes</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {saveSuccess && (
-        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3.5 flex items-center gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3.5 flex items-center gap-2 text-xs font-medium text-emerald-800 dark:text-emerald-300 animate-in fade-in duration-200">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
           <span>Settings saved successfully!</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 p-3.5 flex items-center gap-2 text-xs font-medium text-rose-800 dark:text-rose-300">
-          <AlertCircle className="h-4 w-4 text-rose-600" />
+        <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 p-3.5 flex items-center gap-2 text-xs font-medium text-rose-800 dark:text-rose-300 animate-in fade-in duration-200">
+          <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Tabs Navigation */}
-      <div className="flex border-b border-zinc-200 dark:border-zinc-800 gap-2 overflow-x-auto no-scrollbar">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+      {/* Section Navigation */}
+      {/* Mobile Grid Navigation (2 columns x 3 rows for high clarity & touch targets) */}
+      <div className="sm:hidden grid grid-cols-2 gap-2">
+        {sections.map((sec) => {
+          const Icon = sec.icon;
+          const isActive = activeSection === sec.id;
           return (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              key={sec.id}
+              type="button"
+              onClick={() => setActiveSection(sec.id)}
+              className={`flex items-center gap-2.5 p-3 min-h-[48px] rounded-xl border text-left transition active:scale-[0.98] ${
+                isActive
+                  ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900 shadow-sm'
+                  : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="text-xs font-semibold leading-tight truncate">{sec.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Desktop Horizontal Navigation */}
+      <div className="hidden sm:flex border-b border-zinc-200 dark:border-zinc-800 gap-2 overflow-x-auto no-scrollbar">
+        {sections.map((sec) => {
+          const Icon = sec.icon;
+          const isActive = activeSection === sec.id;
+          return (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => setActiveSection(sec.id)}
               className={`flex items-center gap-2 pb-3 px-3 text-xs font-semibold whitespace-nowrap border-b-2 transition ${
                 isActive
                   ? 'border-zinc-900 text-zinc-900 dark:border-white dark:text-zinc-50'
@@ -335,19 +547,19 @@ export default function SettingsPage() {
               }`}
             >
               <Icon className="h-4 w-4" />
-              <span>{tab.label}</span>
+              <span>{sec.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* TAB CONTENT: General */}
-      {activeTab === 'general' && (
+      {/* SECTION 1: GYM PROFILE */}
+      {activeSection === 'profile' && (
         <div className="space-y-6 max-w-2xl">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">General Information</h2>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Gym Profile</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Basic details about your gym displayed across QR registration and member receipts.
+              Basic identity and official contact details for your gym displayed across receipts and member notifications.
             </p>
           </div>
 
@@ -360,7 +572,8 @@ export default function SettingsPage() {
                 type="text"
                 value={gymName}
                 onChange={(e) => setGymName(e.target.value)}
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                placeholder="e.g. Iron Pulse Fitness"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
               />
             </div>
 
@@ -373,7 +586,8 @@ export default function SettingsPage() {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                  placeholder="e.g. 9876543210"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
                 />
               </div>
               <div>
@@ -384,7 +598,8 @@ export default function SettingsPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                  placeholder="contact@ironpulse.fit"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
                 />
               </div>
             </div>
@@ -393,52 +608,523 @@ export default function SettingsPage() {
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                 Gym Address
               </label>
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                Public QR Slug *
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                />
-              </div>
-              <p className="text-[11px] text-zinc-400 mt-1">
-                Public onboarding link: <strong>gymora.fit/join/{slug}</strong>
-              </p>
-            </div>
-
-            <div>
-              <LogoUploader
-                value={logoUrl}
-                onChange={setLogoUrl}
-                label="Gym Logo"
-                description="Upload new gym logo (PNG, JPG, SVG, WebP up to 3MB) or paste URL"
+                placeholder="Shop No. 4, 2nd Floor, Main Market..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB CONTENT: Domain & Branding */}
-      {activeTab === 'domain' && (
-        <div className="space-y-8 max-w-3xl">
-          {/* Header Description */}
+      {/* SECTION 2: ONLINE REGISTRATION */}
+      {activeSection === 'registration' && (
+        <div className="space-y-6 max-w-2xl">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Custom Domain & White-Label Branding</h2>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Online Registration & Public QR</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Host your gym&apos;s registration portal and member experience under your own gym brand, slug, and custom domain.
+              Allow new walk-in members to scan a QR code at your front desk and submit their details directly into your dashboard.
             </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                Gym Slug (Web URL identifier) *
+              </label>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                placeholder="e.g. iron-pulse"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+              />
+              <p className="text-[11px] text-zinc-400 mt-1">
+                Only lowercase letters, numbers, and hyphens.
+              </p>
+            </div>
+
+            {/* Live Registration Link Box */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/70 dark:bg-zinc-900/50 space-y-3">
+              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 block">
+                Public Member Onboarding Link
+              </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <span className="text-xs font-mono text-zinc-800 dark:text-zinc-200 break-all">
+                  {registrationUrl}
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyRegistrationUrl(registrationUrl)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition min-h-[44px]"
+                  >
+                    {copiedRegistrationUrl ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-emerald-600 font-semibold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={`/join/${slug || 'demo-gym'}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition min-h-[44px]"
+                  >
+                    <span>Preview</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Reception QR Guidance */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-2">
+              <div className="flex items-center gap-2">
+                <QrCode className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <h3 className="text-xs font-semibold text-emerald-900 dark:text-emerald-300">
+                  Reception Desk Walk-in Flow
+                </h3>
+              </div>
+              <p className="text-xs text-emerald-800 dark:text-emerald-400 leading-relaxed">
+                Print the QR code from the public onboarding page and place it at your reception desk. When new members scan it, their application appears in your <strong>Signups</strong> tab awaiting your 1-tap payment verification and approval.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 3: PAYMENTS */}
+      {activeSection === 'payments' && (
+        <div className="space-y-8 max-w-2xl">
+          {/* Section 3.1: Manual Payments */}
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Manual Payment Collection</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Support direct Cash, UPI, and Counter QR payments with zero gateway deductions.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Gym UPI ID (VPA)
+                </label>
+                <input
+                  type="text"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  placeholder="e.g. 9876543210@ybl or ironpulse@okaxis"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Counter UPI QR Image URL
+                </label>
+                <input
+                  type="url"
+                  value={upiQrUrl}
+                  onChange={(e) => setUpiQrUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Payment Instructions for Reception
+                </label>
+                <textarea
+                  rows={2}
+                  value={paymentInstructions}
+                  onChange={(e) => setPaymentInstructions(e.target.value)}
+                  placeholder="e.g. Please show the UPI transaction screenshot or pay cash at the reception desk."
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3.2: Online Payment Gateway */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Online Payment Gateway</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Accept automated payments online via Razorpay, PhonePe, Cashfree, or Paytm.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer min-h-[44px]">
+                <input
+                  type="checkbox"
+                  checked={isGatewayEnabled}
+                  onChange={(e) => setIsGatewayEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-zinc-900 dark:peer-checked:bg-white"></div>
+              </label>
+            </div>
+
+            {isGatewayEnabled ? (
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                    Gateway Provider
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(['razorpay', 'phonepe', 'cashfree', 'paytm'] as const).map((prov) => (
+                      <button
+                        key={prov}
+                        type="button"
+                        onClick={() => setGatewayProvider(prov)}
+                        className={`rounded-xl py-2.5 px-3 text-xs font-semibold capitalize border transition min-h-[44px] ${
+                          gatewayProvider === prov
+                            ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
+                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {prov === 'phonepe' ? 'PhonePe PG' : prov}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    {gatewayProvider.toUpperCase()} Key ID
+                  </label>
+                  <input
+                    type="text"
+                    value={gatewayKeyId}
+                    onChange={(e) => setGatewayKeyId(e.target.value)}
+                    placeholder="Key ID"
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    Key Secret
+                  </label>
+                  <input
+                    type="password"
+                    value={gatewayKeySecret}
+                    onChange={(e) => setGatewayKeySecret(e.target.value)}
+                    placeholder="Leave empty to keep current secret"
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
+                  />
+                </div>
+
+                <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
+                  <span className="font-semibold">Webhook URL:</span>{' '}
+                  <code className="font-mono text-zinc-900 dark:text-zinc-100 break-all">
+                    https://gymora.fit/api/webhooks/{gatewayProvider}
+                  </code>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-5 text-center text-xs text-zinc-400">
+                Online gateway is currently disabled. Toggle the switch above to connect Razorpay, PhonePe, or Cashfree.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 4: WHATSAPP */}
+      {activeSection === 'whatsapp' && (
+        <div className="space-y-6 max-w-2xl">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">WhatsApp Messaging Modes</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Choose between 1-tap manual click-to-chat or automated WhatsApp Business Cloud API notifications.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div
+              onClick={() => setWhatsappMode('local_click_to_chat')}
+              className={`cursor-pointer rounded-xl border p-4 transition ${
+                whatsappMode === 'local_click_to_chat'
+                  ? 'border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-900/60 ring-1 ring-zinc-900 dark:ring-white'
+                  : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                100% Free • Ready to Use
+              </span>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-1.5">Manual WhatsApp (1-Tap)</h3>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                Clicking WhatsApp on any member opens your phone app or WhatsApp Web with prefilled message.
+              </p>
+            </div>
+
+            <div
+              onClick={() => setWhatsappMode('cloud_api')}
+              className={`cursor-pointer rounded-xl border p-4 transition ${
+                whatsappMode === 'cloud_api'
+                  ? 'border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-900/60 ring-1 ring-zinc-900 dark:ring-white'
+                  : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                Automated Background
+              </span>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-1.5">WhatsApp Business Cloud API</h3>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                Automate reminders and receipts via Meta&apos;s official Cloud API using pre-approved templates.
+              </p>
+            </div>
+          </div>
+
+          {whatsappMode === 'cloud_api' && (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Connection Status</span>
+                <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                  {fbWabaId ? 'Connected' : 'Not connected'}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  WhatsApp Business Account (WABA) ID
+                </label>
+                <input
+                  type="text"
+                  value={fbWabaId}
+                  onChange={(e) => setFbWabaId(e.target.value)}
+                  placeholder="e.g. 102938475610293"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none min-h-[44px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                  Phone Number ID
+                </label>
+                <input
+                  type="text"
+                  value={fbPhoneNumberId}
+                  onChange={(e) => setFbPhoneNumberId(e.target.value)}
+                  placeholder="e.g. 987654321012345"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none min-h-[44px]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 5: AUTOMATION */}
+      {activeSection === 'automation' && (
+        <div className="space-y-8 max-w-3xl">
+          {/* 5.1 Auto-cancellation rule */}
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Membership Auto-Cancellation Rule</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Automatically cancel memberships that remain unpaid past a specified grace period.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                  Automatically cancel overdue memberships after:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { days: null, label: 'Never (Manual)' },
+                    { days: 3, label: '3 Days Overdue' },
+                    { days: 7, label: '7 Days Overdue' },
+                    { days: 14, label: '14 Days Overdue' },
+                    { days: 30, label: '30 Days Overdue' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setAutoCancelDays(opt.days)}
+                      className={`rounded-xl py-2.5 px-3 text-xs font-semibold border transition min-h-[44px] ${
+                        autoCancelDays === opt.days
+                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
+                          : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                <strong className="text-zinc-900 dark:text-zinc-100">Financial History Guarantee:</strong>{' '}
+                Cancelling an unpaid membership moves the membership lifecycle to <em>Cancelled</em> and deactivates access. The member&apos;s full profile, past payments, and subscription history remain fully preserved and searchable.
+              </div>
+            </div>
+          </div>
+
+          {/* 5.2 Reminder Rules & Automation Schedule Engine */}
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Automated Reminder Schedules</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Control when automated payment reminders and updates are triggered. Messages respect member WhatsApp opt-out preferences.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs min-w-[500px]">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 font-semibold text-zinc-500">
+                      <th className="py-3 px-4">Event Trigger</th>
+                      <th className="py-3 px-4">Timing Offset</th>
+                      <th className="py-3 px-4">Channel</th>
+                      <th className="py-3 px-4">Template</th>
+                      <th className="py-3 px-4 text-right">Enabled</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {automationRules.map((rule) => (
+                      <tr key={rule.id}>
+                        <td className="py-3 px-4 font-medium text-zinc-900 dark:text-zinc-100 capitalize">
+                          {rule.event_type.replace(/_/g, ' ')}
+                        </td>
+                        <td className="py-3 px-4 text-zinc-500">
+                          {rule.timing_offset_days === 0
+                            ? 'Immediate / On date'
+                            : rule.timing_offset_days < 0
+                            ? `${Math.abs(rule.timing_offset_days)} days before`
+                            : `${rule.timing_offset_days} days after`}
+                        </td>
+                        <td className="py-3 px-4 uppercase font-semibold text-zinc-400">
+                          {rule.channel}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-300">
+                          {rule.template_name}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                            Active
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 6: DOMAIN & BRANDING */}
+      {activeSection === 'branding' && (
+        <div className="space-y-8 max-w-3xl">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Domain & White-Label Branding</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Customize your gym&apos;s brand appearance, logo, and host registration under your own domain name.
+            </p>
+          </div>
+
+          {/* Logo Upload */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-4 shadow-sm">
+            <LogoUploader
+              value={logoUrl}
+              onChange={setLogoUrl}
+              label="Gym Brand Logo"
+              description="Displays on your custom domain header, member receipts, and onboarding portal"
+            />
+          </div>
+
+          {/* Brand Accent Color */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2.5 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">
+                <Palette className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Brand Theme & Appearance
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              Customize the primary accent color of your registration portal and member interface.
+            </p>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Brand Accent Color
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {[
+                  { name: 'Emerald', hex: '#10b981' },
+                  { name: 'Blue', hex: '#3b82f6' },
+                  { name: 'Violet', hex: '#8b5cf6' },
+                  { name: 'Amber', hex: '#f59e0b' },
+                  { name: 'Rose', hex: '#ef4444' },
+                  { name: 'Cyan', hex: '#06b6d4' },
+                  { name: 'Dark', hex: '#18181b' },
+                ].map((color) => (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    onClick={() => setBrandColor(color.hex)}
+                    className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition min-h-[44px] ${
+                      brandColor === color.hex
+                        ? 'border-zinc-900 bg-zinc-100 text-zinc-900 dark:border-white dark:bg-zinc-800 dark:text-white ring-2 ring-zinc-900 dark:ring-white ring-offset-1'
+                        : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span
+                      className="h-3.5 w-3.5 rounded-full shadow-inner shrink-0"
+                      style={{ backgroundColor: color.hex }}
+                    />
+                    <span>{color.name}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={brandColor}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    className="h-9 w-9 cursor-pointer rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={brandColor}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    className="w-28 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2 text-xs font-mono uppercase text-zinc-900 dark:text-zinc-100 focus:outline-none min-h-[44px]"
+                  />
+                </div>
+                <div
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-white shadow-sm flex items-center min-h-[44px]"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  Live Button Preview
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Verification Notification Banner */}
@@ -464,7 +1150,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* TIER 1: Free Branded Subdomain (Default) */}
+          {/* Tier 1: Free Branded Subdomain (Default) */}
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
               <div className="flex items-center gap-2.5">
@@ -487,7 +1173,7 @@ export default function SettingsPage() {
               Every gym on Gymora automatically gets an instantly live, SSL-secured branded web address. Share this link on your Instagram bio, WhatsApp, or Google Business profile.
             </p>
 
-            <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xs font-mono font-medium text-zinc-900 dark:text-zinc-100 truncate">
                   https://{slug || 'your-gym'}.gymora.swadyum.store
@@ -497,7 +1183,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => handleCopySubdomain(`https://${slug || 'your-gym'}.gymora.swadyum.store`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition min-h-[44px]"
                 >
                   {copiedSubdomain ? (
                     <>
@@ -515,20 +1201,16 @@ export default function SettingsPage() {
                   href={`/join/${slug || 'demo-gym'}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition"
+                  className="inline-flex items-center justify-center gap-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition min-h-[44px]"
                 >
                   <span>Preview</span>
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
             </div>
-
-            <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Tip: You can customize the subdomain slug (<strong>{slug || 'your-gym'}</strong>) anytime under the <em>General</em> tab.
-            </div>
           </div>
 
-          {/* TIER 2: Custom Gym Domain */}
+          {/* Tier 2: Custom Gym Domain */}
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-5 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
               <div className="flex items-center gap-2.5">
@@ -571,14 +1253,14 @@ export default function SettingsPage() {
                   value={customDomain}
                   onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/^(https?:\/\/)/, '').replace(/\/.*$/, '').trim())}
                   placeholder="e.g. portal.mygym.com or gym.mybrand.in"
-                  className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
+                  className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2.5 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none min-h-[44px]"
                 />
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleVerifyDns}
                     disabled={isVerifyingDomain || !customDomain.trim()}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800 active:scale-95 disabled:opacity-50 transition dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 min-h-[44px]"
                   >
                     {isVerifyingDomain ? (
                       <>
@@ -597,7 +1279,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleDisconnectDomain}
-                      className="rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition"
+                      className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-3 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 transition min-h-[44px]"
                     >
                       Disconnect
                     </button>
@@ -636,7 +1318,7 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => handleCopyCustomDomain('gymora.swadyum.store')}
-                          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                          className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1"
                         >
                           {copiedCustomDomain ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         </button>
@@ -658,412 +1340,49 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
-          {/* BRAND APPEARANCE & THEME COLOR */}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 bg-white dark:bg-zinc-900/50 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2.5 border-b border-zinc-100 dark:border-zinc-800/80 pb-3.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">
-                <Palette className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Brand Theme & Appearance
-                </h3>
-              </div>
-            </div>
-
-            <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              Customize the primary accent color of your registration portal and member interface.
-            </p>
-
-            <div className="space-y-3">
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Brand Accent Color
-              </label>
-
-              <div className="flex flex-wrap items-center gap-3">
-                {[
-                  { name: 'Emerald', hex: '#10b981' },
-                  { name: 'Blue', hex: '#3b82f6' },
-                  { name: 'Violet', hex: '#8b5cf6' },
-                  { name: 'Amber', hex: '#f59e0b' },
-                  { name: 'Rose', hex: '#ef4444' },
-                  { name: 'Cyan', hex: '#06b6d4' },
-                  { name: 'Dark', hex: '#18181b' },
-                ].map((color) => (
-                  <button
-                    key={color.hex}
-                    type="button"
-                    onClick={() => setBrandColor(color.hex)}
-                    className={`group relative flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                      brandColor === color.hex
-                        ? 'border-zinc-900 bg-zinc-100 text-zinc-900 dark:border-white dark:bg-zinc-800 dark:text-white ring-2 ring-zinc-900 dark:ring-white ring-offset-1'
-                        : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span
-                      className="h-3.5 w-3.5 rounded-full shadow-inner"
-                      style={{ backgroundColor: color.hex }}
-                    />
-                    <span>{color.name}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={brandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
-                    className="h-8 w-8 cursor-pointer rounded border border-zinc-200 dark:border-zinc-700 bg-transparent p-0.5"
-                  />
-                  <input
-                    type="text"
-                    value={brandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
-                    className="w-28 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-mono uppercase text-zinc-900 dark:text-zinc-100 focus:outline-none"
-                  />
-                </div>
-                <div
-                  className="rounded-md px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
-                  style={{ backgroundColor: brandColor }}
-                >
-                  Live Button Preview
-                </div>
-              </div>
-
-              <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-4">
-                <LogoUploader
-                  value={logoUrl}
-                  onChange={setLogoUrl}
-                  label="Gym Brand Logo"
-                  description="Displays on your custom domain header, member receipts, and join portal"
-                />
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* TAB CONTENT: Payments */}
-      {activeTab === 'payments' && (
-        <div className="space-y-8 max-w-2xl">
-          {/* Section 1: Manual Payments */}
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Manual Payments</h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                Support Cash, UPI, and Counter QR payments with 0% gateway fees.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  UPI ID (VPA)
-                </label>
-                <input
-                  type="text"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                  placeholder="e.g. 9876543210@ybl or gymname@okaxis"
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Local Counter QR Image URL
-                </label>
-                <input
-                  type="url"
-                  value={upiQrUrl}
-                  onChange={(e) => setUpiQrUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Payment Instructions for Reception
-                </label>
-                <textarea
-                  rows={2}
-                  value={paymentInstructions}
-                  onChange={(e) => setPaymentInstructions(e.target.value)}
-                  placeholder="e.g. Please show the UPI transaction screenshot or pay cash at the desk."
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Online Payment Gateway */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Online Payment Gateway</h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Accept automated payments online via Razorpay, PhonePe, Cashfree, or Paytm.
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isGatewayEnabled}
-                  onChange={(e) => setIsGatewayEnabled(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900 dark:peer-checked:bg-white"></div>
-              </label>
-            </div>
-
-            {isGatewayEnabled ? (
-              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                    Gateway Provider
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(['razorpay', 'phonepe', 'cashfree', 'paytm'] as const).map((prov) => (
-                      <button
-                        key={prov}
-                        type="button"
-                        onClick={() => setGatewayProvider(prov)}
-                        className={`rounded-lg py-2 px-3 text-xs font-semibold capitalize border transition ${
-                          gatewayProvider === prov
-                            ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
-                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        {prov === 'phonepe' ? 'PhonePe PG' : prov}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    {gatewayProvider.toUpperCase()} Key ID
-                  </label>
-                  <input
-                    type="text"
-                    value={gatewayKeyId}
-                    onChange={(e) => setGatewayKeyId(e.target.value)}
-                    placeholder="Key ID"
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                    Key Secret
-                  </label>
-                  <input
-                    type="password"
-                    value={gatewayKeySecret}
-                    onChange={(e) => setGatewayKeySecret(e.target.value)}
-                    placeholder="Leave empty to keep current secret"
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:border-zinc-900 focus:outline-none"
-                  />
-                </div>
-
-                <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400">
-                  <span className="font-semibold">Webhook URL:</span>{' '}
-                  <code className="font-mono text-zinc-900 dark:text-zinc-100">https://gymora.fit/api/webhooks/{gatewayProvider}</code>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-5 text-center text-xs text-zinc-400">
-                Online gateway is currently disabled. Toggle the switch above to connect Razorpay, PhonePe, or Cashfree.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT: WhatsApp */}
-      {activeTab === 'whatsapp' && (
-        <div className="space-y-6 max-w-2xl">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">WhatsApp Messaging Modes</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Choose between 1-tap manual click-to-chat or automated WhatsApp Business Cloud API notifications.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div
-              onClick={() => setWhatsappMode('local_click_to_chat')}
-              className={`cursor-pointer rounded-xl border p-4 transition ${
-                whatsappMode === 'local_click_to_chat'
-                  ? 'border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-900/60 ring-1 ring-zinc-900 dark:ring-white'
-                  : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
-              }`}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                100% Free • Ready to Use
+      {/* Floating Sticky Save Changes Bar (Appears ONLY when isDirty) */}
+      {isDirty && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-8 sm:w-auto z-50 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="flex items-center justify-between sm:justify-end gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-4 py-3 shadow-2xl ring-1 ring-black/5 dark:ring-white/10">
+            <div className="flex items-center gap-2 mr-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                Unsaved changes
               </span>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-1.5">Manual WhatsApp (1-Tap)</h3>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                Clicking WhatsApp on any member opens your phone app or WhatsApp Web with prefilled message.
-              </p>
             </div>
 
-            <div
-              onClick={() => setWhatsappMode('cloud_api')}
-              className={`cursor-pointer rounded-xl border p-4 transition ${
-                whatsappMode === 'cloud_api'
-                  ? 'border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-900/60 ring-1 ring-zinc-900 dark:ring-white'
-                  : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
-              }`}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Automated Background
-              </span>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mt-1.5">WhatsApp Business Cloud API</h3>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                Automate reminders and receipts via Meta's official Cloud API using pre-approved templates.
-              </p>
-            </div>
-          </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDiscard}
+                disabled={isSaving}
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition disabled:opacity-50"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Discard</span>
+              </button>
 
-          {whatsappMode === 'cloud_api' && (
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Connection Status</span>
-                <span className="rounded-full bg-zinc-200 dark:bg-zinc-800 px-2.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                  {fbWabaId ? 'Connected' : 'Not connected'}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  WhatsApp Business Account (WABA) ID
-                </label>
-                <input
-                  type="text"
-                  value={fbWabaId}
-                  onChange={(e) => setFbWabaId(e.target.value)}
-                  placeholder="e.g. 102938475610293"
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-                  Phone Number ID
-                </label>
-                <input
-                  type="text"
-                  value={fbPhoneNumberId}
-                  onChange={(e) => setFbPhoneNumberId(e.target.value)}
-                  placeholder="e.g. 987654321012345"
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-2 text-sm font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB CONTENT: Reminders & Automations */}
-      {activeTab === 'reminders' && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Automation Rules & Trigger Engine</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Control when automated payment reminders and updates are triggered. Messages respect member WhatsApp opt-out preferences.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 font-semibold text-zinc-500">
-                  <th className="py-3 px-4">Event Trigger</th>
-                  <th className="py-3 px-4">Timing Offset</th>
-                  <th className="py-3 px-4">Channel</th>
-                  <th className="py-3 px-4">Template</th>
-                  <th className="py-3 px-4 text-right">Enabled</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                {automationRules.map((rule) => (
-                  <tr key={rule.id}>
-                    <td className="py-3 px-4 font-medium text-zinc-900 dark:text-zinc-100 capitalize">
-                      {rule.event_type.replace(/_/g, ' ')}
-                    </td>
-                    <td className="py-3 px-4 text-zinc-500">
-                      {rule.timing_offset_days === 0
-                        ? 'Immediate / On date'
-                        : rule.timing_offset_days < 0
-                        ? `${Math.abs(rule.timing_offset_days)} days before`
-                        : `${rule.timing_offset_days} days after`}
-                    </td>
-                    <td className="py-3 px-4 uppercase font-semibold text-zinc-400">
-                      {rule.channel}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-300">
-                      {rule.template_name}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                        Active
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB CONTENT: Membership Rules */}
-      {activeTab === 'rules' && (
-        <div className="space-y-6 max-w-2xl">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Membership Auto-Cancellation Rule</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Automatically cancel memberships that remain unpaid past a specified grace period.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
-            <div>
-              <label className="block text-xs font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
-                Automatically cancel overdue memberships after:
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { days: null, label: 'Never (Manual)' },
-                  { days: 3, label: '3 Days Overdue' },
-                  { days: 7, label: '7 Days Overdue' },
-                  { days: 14, label: '14 Days Overdue' },
-                  { days: 30, label: '30 Days Overdue' },
-                ].map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => setAutoCancelDays(opt.days)}
-                    className={`rounded-lg py-2 px-3 text-xs font-semibold border transition ${
-                      autoCancelDays === opt.days
-                        ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
-                        : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800/60 p-3 text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              <strong className="text-zinc-900 dark:text-zinc-100">Financial History Guarantee:</strong>{' '}
-              Cancelling an unpaid membership moves the membership lifecycle to <em>Cancelled</em> and deactivates access. The member's full profile, past payments, and subscription history remain fully preserved and searchable.
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                disabled={isSaving}
+                className="min-h-[44px] inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 active:scale-95 px-5 py-2 text-xs font-semibold text-white shadow-md transition disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Save Changes</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

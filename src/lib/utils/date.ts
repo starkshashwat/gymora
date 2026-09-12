@@ -63,3 +63,77 @@ export function isExpiringSoon(endDateStr: string | null | undefined, withinDays
   const days = getDaysUntil(endDateStr);
   return days >= 0 && days <= withinDays;
 }
+
+export function formatExactDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  
+  // If only a date string YYYY-MM-DD
+  if (!dateStr.includes('T') && !dateStr.includes(':')) {
+    return formatDisplayDate(dateStr);
+  }
+
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) {
+      return formatDisplayDate(dateStr);
+    }
+    const dateFormatted = d.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const timeFormatted = d.toLocaleTimeString('en-IN', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).replace(/\u202f/g, ' ').toUpperCase();
+
+    return `${dateFormatted} · ${timeFormatted}`;
+  } catch {
+    return formatDisplayDate(dateStr);
+  }
+}
+
+export function formatRelativeDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) {
+      return formatDisplayDate(dateStr);
+    }
+
+    const hasTime = dateStr.includes('T') || dateStr.includes(':');
+    const timeFormatted = hasTime
+      ? d.toLocaleTimeString('en-IN', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }).replace(/\u202f/g, ' ').toUpperCase()
+      : null;
+
+    const now = new Date();
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday =
+      d.getDate() === yesterday.getDate() &&
+      d.getMonth() === yesterday.getMonth() &&
+      d.getFullYear() === yesterday.getFullYear();
+
+    if (isToday) {
+      return timeFormatted ? `Today · ${timeFormatted}` : 'Today';
+    }
+    if (isYesterday) {
+      return timeFormatted ? `Yesterday · ${timeFormatted}` : 'Yesterday';
+    }
+
+    return formatExactDateTime(dateStr);
+  } catch {
+    return formatDisplayDate(dateStr);
+  }
+}

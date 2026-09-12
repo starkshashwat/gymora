@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MemberWithDetails, Payment, MembershipLifecycle } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
-import { formatDisplayDate } from '@/lib/utils/date';
+import { formatDisplayDate, formatExactDateTime } from '@/lib/utils/date';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
 import RenewPlanModal from '@/components/members/RenewPlanModal';
+import PaymentDetailsModal from '@/components/payments/PaymentDetailsModal';
 import {
   ArrowLeft,
   Phone,
@@ -34,6 +35,7 @@ import {
   RefreshCw,
   Layers,
   ChevronDown,
+  Receipt,
 } from 'lucide-react';
 
 export default function MemberDetailPage({ params }: { params: { id: string } }) {
@@ -44,6 +46,8 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
 
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const [selectedPaymentForModal, setSelectedPaymentForModal] = useState<Payment | null>(null);
+  const [isPaymentDetailsOpen, setIsPaymentDetailsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Lifecycle action states
@@ -536,41 +540,87 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3 px-5">Date</th>
-                  <th className="py-3 px-5">Amount</th>
-                  <th className="py-3 px-5">Method</th>
-                  <th className="py-3 px-5">Notes</th>
-                  <th className="py-3 px-5 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3.5 px-5 font-medium text-slate-700">
-                      {formatDisplayDate(p.paid_at)}
-                    </td>
-                    <td className="py-3.5 px-5 font-black text-slate-900">
+          <div>
+            {/* Mobile Cards (< sm) */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {payments.map((p) => (
+                <div
+                  key={p.id}
+                  onClick={() => {
+                    setSelectedPaymentForModal(p);
+                    setIsPaymentDetailsOpen(true);
+                  }}
+                  className="p-4 flex items-center justify-between gap-3 hover:bg-slate-50 cursor-pointer transition"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-base font-black text-slate-900">
                       {formatINR(p.amount)}
-                    </td>
-                    <td className="py-3.5 px-5">
-                      {getMethodBadge(p.payment_method)}
-                    </td>
-                    <td className="py-3.5 px-5 text-slate-500 text-xs">
-                      {p.notes || '—'}
-                    </td>
-                    <td className="py-3.5 px-5 text-right">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 uppercase">
-                        <CheckCircle className="h-3 w-3" /> Paid
-                      </span>
-                    </td>
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span>{formatExactDateTime(p.paid_at || p.created_at)}</span>
+                    </div>
+                    {p.notes && (
+                      <div className="text-[11px] text-slate-400 truncate mt-1">
+                        {p.notes}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 uppercase">
+                      <CheckCircle className="h-3 w-3" /> Paid
+                    </span>
+                    {getMethodBadge(p.payment_method)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table (>= sm) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3 px-5">Date & Exact Time</th>
+                    <th className="py-3 px-5">Amount</th>
+                    <th className="py-3 px-5">Method</th>
+                    <th className="py-3 px-5">Notes</th>
+                    <th className="py-3 px-5 text-right">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {payments.map((p) => (
+                    <tr
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedPaymentForModal(p);
+                        setIsPaymentDetailsOpen(true);
+                      }}
+                      className="hover:bg-slate-50/80 cursor-pointer transition group"
+                    >
+                      <td className="py-3.5 px-5 font-medium text-slate-700 flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{formatExactDateTime(p.paid_at || p.created_at)}</span>
+                      </td>
+                      <td className="py-3.5 px-5 font-black text-slate-900">
+                        {formatINR(p.amount)}
+                      </td>
+                      <td className="py-3.5 px-5">
+                        {getMethodBadge(p.payment_method)}
+                      </td>
+                      <td className="py-3.5 px-5 text-slate-500 text-xs">
+                        {p.notes || '—'}
+                      </td>
+                      <td className="py-3.5 px-5 text-right">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 uppercase">
+                          <CheckCircle className="h-3 w-3" /> Paid
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -721,6 +771,17 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
           loadData();
           window.dispatchEvent(new Event('gym:member-updated'));
         }}
+      />
+
+      {/* Payment Details Modal */}
+      <PaymentDetailsModal
+        isOpen={isPaymentDetailsOpen}
+        onClose={() => setIsPaymentDetailsOpen(false)}
+        payment={selectedPaymentForModal ? {
+          ...selectedPaymentForModal,
+          member_name: member.full_name,
+          plan_name: mship?.plan_name_snapshot,
+        } : null}
       />
     </div>
   );

@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MemberWithDetails, MembershipLifecycle, MemberFilterType } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
-import { formatDisplayDate } from '@/lib/utils/date';
+import { formatDisplayDate, isExpiringSoon } from '@/lib/utils/date';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import { exportMembersToExcel } from '@/lib/utils/excelExport';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
 import RenewPlanModal from '@/components/members/RenewPlanModal';
+import MemberFilterModal from '@/components/members/MemberFilterModal';
 import {
   Search,
   CheckCircle,
@@ -17,6 +19,8 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronRight,
+  ChevronDown,
+  Filter,
   Loader2,
   User,
   UserPlus,
@@ -35,13 +39,38 @@ import {
   Download,
   CheckSquare,
   Square,
+  ArrowRight,
 } from 'lucide-react';
 
 export default function MembersPage() {
+  const router = useRouter();
   const [members, setMembers] = useState<MemberWithDetails[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<MemberFilterType>('all');
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const filterCounts: Partial<Record<MemberFilterType, number>> = {
+    all: members.length,
+    due: members.filter((m) => (m.membership?.outstanding_balance || 0) > 0 && !m.membership?.is_overdue).length,
+    overdue: members.filter((m) => m.membership?.is_overdue).length,
+    expiring_soon: members.filter((m) => isExpiringSoon(m.membership?.end_date)).length,
+    paid: members.filter((m) => m.membership && m.membership.outstanding_balance === 0).length,
+    paused: members.filter((m) => m.membership?.lifecycle === 'paused').length,
+    cancelled: members.filter((m) => m.membership?.lifecycle === 'cancelled').length,
+  };
+
+  const getFilterLabel = (f: MemberFilterType) => {
+    switch (f) {
+      case 'due': return 'Due Today / Partial';
+      case 'overdue': return 'Overdue';
+      case 'expiring_soon': return 'Expiring Soon';
+      case 'paid': return 'Fully Paid';
+      case 'paused': return 'Paused';
+      case 'cancelled': return 'Cancelled';
+      default: return 'All Members';
+    }
+  };
 
   // Multi-select for Batch WhatsApp & Export
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -347,7 +376,7 @@ export default function MembersPage() {
       </div>
 
       {/* Search and Filters Bar */}
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2.5">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -360,8 +389,41 @@ export default function MembersPage() {
           />
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto no-scrollbar">
+        {/* Mobile Filter Trigger Sheet Button */}
+        <div className="flex sm:hidden items-center gap-2">
+          <button
+            onClick={() => setIsFilterModalOpen(true)}
+            className={`flex-1 flex items-center justify-between gap-2 rounded-xl border py-2.5 px-3.5 text-xs font-bold shadow-sm transition ${
+              filter !== 'all'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900'
+                : 'border-slate-300 bg-white text-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Filter className={`h-3.5 w-3.5 ${filter !== 'all' ? 'text-emerald-600' : 'text-slate-400'}`} />
+              <span>{getFilterLabel(filter)}</span>
+              {filterCounts[filter] !== undefined && (
+                <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-bold">
+                  {filterCounts[filter]}
+                </span>
+              )}
+            </div>
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          </button>
+
+          {filter !== 'all' && (
+            <button
+              onClick={() => setFilter('all')}
+              className="rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-bold text-slate-500 hover:text-slate-900 shadow-sm"
+              title="Reset filter"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Desktop Filter Tabs (hidden on mobile, visible on sm and above) */}
+        <div className="hidden sm:flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto no-scrollbar">
           {(['all', 'due', 'overdue', 'expiring_soon', 'paid', 'paused', 'cancelled'] as const).map((tab) => (
             <button
               key={tab}
@@ -467,7 +529,8 @@ export default function MembersPage() {
               return (
                 <div
                   key={m.id}
-                  className={`p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                  onClick={() => router.push(`/members/${m.id}`)}
+                  className={`p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition cursor-pointer ${
                     selectedIds.includes(m.id) ? 'bg-emerald-50/40' : 'hover:bg-slate-50/70'
                   }`}
                 >
@@ -526,23 +589,25 @@ export default function MembersPage() {
                   </div>
 
                   {/* Financial amounts & Actions */}
-                  <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-4 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-                    <div className="text-left md:text-right">
-                      <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Outstanding</div>
+                  <div
+                    className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="text-left md:text-right mr-2 hidden sm:block">
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Outstanding</div>
                       <div className={`text-base font-black ${hasOutstanding ? (mship?.is_overdue ? 'text-rose-600' : 'text-amber-600') : 'text-emerald-600'}`}>
                         {formatINR(mship?.outstanding_balance || 0)}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
                       {/* Call Action Button */}
                       <a
                         href={`tel:${m.phone}`}
-                        className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition shadow-sm"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition shadow-2xs"
                         title="Call member"
                       >
-                        <Phone className="h-3.5 w-3.5 text-slate-600" />
-                        <span className="hidden sm:inline">Call</span>
+                        <Phone className="h-4 w-4 text-slate-600" />
                       </a>
 
                       {/* WhatsApp Button */}
@@ -550,28 +615,47 @@ export default function MembersPage() {
                         href={waUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shadow-2xs"
                         title="Open WhatsApp chat or reminder"
                       >
                         <MessageCircle className="h-4 w-4 text-emerald-600" />
-                        <span className="hidden sm:inline">WhatsApp</span>
                       </a>
 
-                      {/* Mark Paid Button (Primary, always enabled for owner) */}
-                      <button
-                        onClick={() => handleOpenMarkPaid(m)}
-                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
-                        title="Record payment"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Mark Paid</span>
-                      </button>
+                      {/* Contextual Primary Action Button */}
+                      {hasOutstanding ? (
+                        <button
+                          onClick={() => handleOpenMarkPaid(m)}
+                          className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                          title="Record payment"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Collect {formatINR(mship?.outstanding_balance || 0)}</span>
+                        </button>
+                      ) : isExpiringSoon(mship?.end_date) || lifecycle === 'expired' ? (
+                        <button
+                          onClick={() => handleOpenRenew(m)}
+                          className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-slate-800 active:scale-95 transition"
+                          title="Renew membership"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Renew</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleOpenMarkPaid(m)}
+                          className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                          title="Record payment"
+                        >
+                          <Banknote className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Pay</span>
+                        </button>
+                      )}
 
                       {/* More Menu Dropdown */}
                       <div className="relative">
                         <button
                           onClick={() => setActiveMenuId(activeMenuId === m.id ? null : m.id)}
-                          className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 border border-transparent hover:border-slate-200 transition"
+                          className="flex h-9 w-9 items-center justify-center rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 border border-slate-200 transition"
                           title="More options"
                         >
                           <MoreVertical className="h-4 w-4" />
@@ -649,7 +733,7 @@ export default function MembersPage() {
 
                       <Link
                         href={`/members/${m.id}`}
-                        className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
                         title="View member details"
                       >
                         <ChevronRight className="h-5 w-5" />
@@ -751,6 +835,15 @@ export default function MembersPage() {
           loadMembers();
           window.dispatchEvent(new Event('gym:member-updated'));
         }}
+      />
+
+      {/* Member Filter Modal (Mobile Bottom Sheet) */}
+      <MemberFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        currentFilter={filter}
+        onSelectFilter={setFilter}
+        counts={filterCounts}
       />
     </div>
   );

@@ -168,6 +168,7 @@ export interface RegistrationRequest {
   plan_price_snapshot?: number | null;
   whatsapp_opt_in?: boolean;
   status: RegistrationStatus;
+  converted_member_id?: string | null;
   created_at: string;
   updated_at: string;
 }

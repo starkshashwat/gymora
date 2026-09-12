@@ -84,8 +84,8 @@ describe('Redesign Architecture: Lifecycle, Registration Approval & Settings', (
     expect(approval.membership.status).toBe('paid');
     expect(approval.membership.lifecycle).toBe('active');
     expect(approval.payment).toBeDefined();
-    expect(approval.payment.amount).toBe(1500);
-    expect(approval.payment.payment_method).toBe('upi');
+    expect(approval.payment!.amount).toBe(1500);
+    expect(approval.payment!.payment_method).toBe('upi');
 
     // Verify member exists in list with zero balance
     const memberDetails = gymService.getMemberById(approval.member.id, 'gym-demo-01');
@@ -165,7 +165,7 @@ describe('Redesign Architecture: Lifecycle, Registration Approval & Settings', (
   it('applies auto-cancellation to overdue members beyond threshold', () => {
     // Set auto cancel to 1 day
     gymService.updateSettings('gym-demo-01', {
-      auto_cancel_overdue_days: 1,
+      rules: { auto_cancel_overdue_days: 1 },
     });
 
     // Check and apply
