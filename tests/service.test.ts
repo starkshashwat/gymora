@@ -101,4 +101,58 @@ describe('Gym Business Logic & Service Suite', () => {
     expect(created!.phone).toBe('+919988112233');
     expect(created!.membership!.plan_name_snapshot).toBe('Monthly Standard');
   });
+
+  it('deletes member and all related memberships and payments', () => {
+    // 1. Create a member to delete
+    const added = gymService.addMember({
+      full_name: 'Test Delete Member',
+      phone: '9123456780',
+      plan_id: 'plan-monthly-01',
+    });
+    expect(added).toBeDefined();
+
+    // Verify member exists
+    const beforeList = gymService.getMembersWithDetails();
+    expect(beforeList.some((m) => m.id === added.id)).toBe(true);
+
+    // 2. Delete member
+    const deleteSuccess = gymService.deleteMember(added.id);
+    expect(deleteSuccess).toBe(true);
+
+    // 3. Verify member is gone
+    const afterList = gymService.getMembersWithDetails();
+    expect(afterList.some((m) => m.id === added.id)).toBe(false);
+    expect(gymService.getMemberById(added.id)).toBeNull();
+  });
+
+  it('maintains strict multi-tenant data isolation by gymId', () => {
+    const gymA = 'custom-gym-alpha';
+    const gymB = 'custom-gym-beta';
+
+    // Add member to Gym A
+    const memberA = gymService.addMember({
+      gymId: gymA,
+      full_name: 'Alpha Member',
+      phone: '9000000001',
+      plan_id: 'plan-monthly-01',
+    });
+
+    // Add member to Gym B
+    const memberB = gymService.addMember({
+      gymId: gymB,
+      full_name: 'Beta Member',
+      phone: '9000000002',
+      plan_id: 'plan-monthly-01',
+    });
+
+    // Query Gym A: must contain memberA and NOT memberB
+    const membersA = gymService.getMembersWithDetails(gymA);
+    expect(membersA.some((m) => m.id === memberA.id)).toBe(true);
+    expect(membersA.some((m) => m.id === memberB.id)).toBe(false);
+
+    // Query Gym B: must contain memberB and NOT memberA
+    const membersB = gymService.getMembersWithDetails(gymB);
+    expect(membersB.some((m) => m.id === memberB.id)).toBe(true);
+    expect(membersB.some((m) => m.id === memberA.id)).toBe(false);
+  });
 });

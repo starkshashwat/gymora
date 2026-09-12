@@ -9,7 +9,6 @@ import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
 import {
   Search,
-  Filter,
   CheckCircle,
   MessageCircle,
   Clock,
@@ -18,6 +17,9 @@ import {
   ChevronRight,
   Loader2,
   User,
+  UserPlus,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 export default function MembersPage() {
@@ -31,6 +33,10 @@ export default function MembersPage() {
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Delete Member state
+  const [memberToDelete, setMemberToDelete] = useState<MemberWithDetails | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const loadMembers = async () => {
     try {
       setIsLoading(true);
@@ -41,7 +47,7 @@ export default function MembersPage() {
       const res = await fetch(`/api/members?${queryParams.toString()}`);
       const data = await res.json();
       if (data.success) {
-        setMembers(data.members);
+        setMembers(data.members || []);
       }
     } catch (e) {
       console.error(e);
@@ -59,8 +65,18 @@ export default function MembersPage() {
 
   useEffect(() => {
     const handleRefresh = () => loadMembers();
+    const handleToast = (e: any) => {
+      if (e.detail?.title) {
+        setToastMessage(`${e.detail.title} ${e.detail.subtitle || ''}`);
+        setTimeout(() => setToastMessage(null), 4000);
+      }
+    };
     window.addEventListener('gym:member-updated', handleRefresh);
-    return () => window.removeEventListener('gym:member-updated', handleRefresh);
+    window.addEventListener('gym:toast-notification', handleToast);
+    return () => {
+      window.removeEventListener('gym:member-updated', handleRefresh);
+      window.removeEventListener('gym:toast-notification', handleToast);
+    };
   }, []);
 
   const handleOpenMarkPaid = (member: MemberWithDetails) => {
@@ -69,9 +85,33 @@ export default function MembersPage() {
   };
 
   const handlePaymentSuccess = (res: any) => {
-    setToastMessage(`Payment of ₹${res.amount_recorded} recorded successfully!`);
+    setToastMessage(`Payment of ₹${res.amount_recorded || res.amount} recorded successfully!`);
     setTimeout(() => setToastMessage(null), 4000);
     loadMembers();
+  };
+
+  const confirmDeleteMember = async () => {
+    if (!memberToDelete) return;
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/members/${memberToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete member');
+      }
+
+      setToastMessage(`Member ${memberToDelete.full_name} deleted from database successfully.`);
+      setTimeout(() => setToastMessage(null), 4000);
+      setMemberToDelete(null);
+      loadMembers();
+      window.dispatchEvent(new Event('gym:member-updated'));
+    } catch (err: any) {
+      alert(err.message || 'Error deleting member');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusBadge = (m: MemberWithDetails) => {
@@ -122,8 +162,8 @@ export default function MembersPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-top-4">
-          <CheckCircle className="h-5 w-5 text-emerald-400" />
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-zinc-700 animate-in fade-in slide-in-from-top-4 max-w-md">
+          <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -138,6 +178,14 @@ export default function MembersPage() {
             Search members, inspect subscription cycles, and manage dues.
           </p>
         </div>
+
+        <button
+          onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-zinc-800 active:scale-95 transition dark:bg-white dark:text-zinc-900"
+        >
+          <UserPlus className="h-4 w-4" />
+          <span>Add Member</span>
+        </button>
       </div>
 
       {/* Search and Filters Bar */}
@@ -184,7 +232,16 @@ export default function MembersPage() {
               <User className="h-6 w-6" />
             </div>
             <h3 className="text-base font-bold text-slate-900">No members found</h3>
-            <p className="text-sm text-slate-500 mt-1">Try refining your search or filter criteria.</p>
+            <p className="text-sm text-slate-500 mt-1 mb-4">
+              {search ? 'Try refining your search or filter criteria.' : 'Start managing your gym by adding your first member.'}
+            </p>
+            <button
+              onClick={() => window.dispatchEvent(new Event('gym:open-add-member'))}
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-bold text-white hover:bg-zinc-800 transition"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>Add Your First Member</span>
+            </button>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -263,6 +320,15 @@ export default function MembersPage() {
                         </span>
                       )}
 
+                      {/* Delete Member Button */}
+                      <button
+                        onClick={() => setMemberToDelete(m)}
+                        className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                        title="Delete member from database"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+
                       <Link
                         href={`/members/${m.id}`}
                         className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
@@ -278,6 +344,61 @@ export default function MembersPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Member Confirmation Modal */}
+      {memberToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-900">Delete Member</h3>
+              <button
+                onClick={() => setMemberToDelete(null)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm text-slate-600">
+              <p>
+                Are you sure you want to delete <strong className="text-slate-900">{memberToDelete.full_name}</strong>?
+              </p>
+              <p className="mt-2 text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200 font-medium">
+                ⚠️ This will permanently remove this member along with their membership cycles and payment history from the database.
+              </p>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                disabled={isDeleting}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMember}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mark Paid Modal */}
       <MarkPaidModal

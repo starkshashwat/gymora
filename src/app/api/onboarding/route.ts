@@ -37,7 +37,23 @@ export async function POST(request: NextRequest) {
         // 2. Associate user with gym in-memory
         gymService.setUserGym(user.id, result.gym_id);
 
-        // 3. Best-effort update to profiles table
+        // 3. Persist gym to Supabase gyms table
+        try {
+          await supabase.from('gyms').upsert({
+            id: result.gym_id,
+            name: body.gym_name.trim(),
+            slug: result.gym_slug,
+            phone: body.phone,
+            address: body.address?.trim() || null,
+            payment_mode: body.payment_mode || 'local_qr',
+            upi_id: body.upi_id?.trim() || null,
+            whatsapp_mode: body.whatsapp_mode || 'local_click_to_chat',
+          });
+        } catch (gymErr) {
+          console.warn("Could not insert gym to Supabase table:", gymErr);
+        }
+
+        // 4. Update profiles table
         try {
           await supabase.from('profiles').upsert({
             id: user.id,
@@ -45,8 +61,8 @@ export async function POST(request: NextRequest) {
             role: 'owner',
             full_name: `${body.gym_name} Owner`,
           });
-        } catch {
-          // Ignore RLS constraint errors if profiles table has no insert policy
+        } catch (profileErr) {
+          console.warn("Could not upsert profile to Supabase table:", profileErr);
         }
       }
     } catch (err) {

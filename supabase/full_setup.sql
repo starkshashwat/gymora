@@ -174,11 +174,17 @@ create policy "Owners can view own gym" on public.gyms for select to authenticat
 drop policy if exists "Owners can update own gym" on public.gyms;
 create policy "Owners can update own gym" on public.gyms for update to authenticated using (id = public.current_user_gym_id());
 
+drop policy if exists "Owners can insert gym" on public.gyms;
+create policy "Owners can insert gym" on public.gyms for insert to authenticated with check (true);
+
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile" on public.profiles for select to authenticated using (id = auth.uid());
 
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles for update to authenticated using (id = auth.uid());
+
+drop policy if exists "Users can insert own profile" on public.profiles;
+create policy "Users can insert own profile" on public.profiles for insert to authenticated with check (id = auth.uid());
 
 drop policy if exists "Owners can manage plans" on public.membership_plans;
 create policy "Owners can manage plans" on public.membership_plans for all to authenticated
@@ -427,6 +433,100 @@ end;
 $$;
 
 grant execute on function public.convert_registration_to_member(uuid, date) to authenticated;
+
+-- Function: Atomic Delete Member
+create or replace function public.delete_member(p_member_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner_gym_id uuid;
+  v_deleted_count integer;
+begin
+  v_owner_gym_id := public.current_user_gym_id();
+  if v_owner_gym_id is null then
+    raise exception 'Not authorized';
+  end if;
+
+  delete from public.members
+  where id = p_member_id and gym_id = v_owner_gym_id;
+
+  get diagnostics v_deleted_count = row_count;
+  if v_deleted_count = 0 then
+    raise exception 'Member not found or not authorized';
+  end if;
+
+  return jsonb_build_object('success', true, 'deleted_member_id', p_member_id);
+end;
+$$;
+
+grant execute on function public.delete_member(uuid) to authenticated;
+
+-- Function: Atomic Add Member with Membership Cycle
+create or replace function public.add_gym_member(
+  p_full_name text,
+  p_phone text,
+  p_email text,
+  p_plan_id uuid,
+  p_start_date date default current_date
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner_gym_id uuid;
+  v_plan record;
+  v_member_id uuid;
+  v_membership_id uuid;
+  v_start date;
+  v_end date;
+begin
+  v_owner_gym_id := public.current_user_gym_id();
+  if v_owner_gym_id is null then
+    raise exception 'Not authorized';
+  end if;
+
+  if trim(p_full_name) = '' or trim(p_phone) = '' then
+    raise exception 'Full name and phone are required';
+  end if;
+
+  select * into v_plan
+  from public.membership_plans
+  where id = p_plan_id and gym_id = v_owner_gym_id;
+
+  if not found then
+    raise exception 'Selected plan does not exist in your gym';
+  end if;
+
+  v_start := coalesce(p_start_date, current_date);
+  v_end := v_start + (v_plan.duration_days || ' days')::interval;
+
+  insert into public.members (gym_id, full_name, phone, email, status, joined_at)
+  values (v_owner_gym_id, trim(p_full_name), trim(p_phone), nullif(trim(p_email), ''), 'active', v_start)
+  returning id into v_member_id;
+
+  insert into public.memberships (
+    gym_id, member_id, plan_id, plan_name_snapshot, amount_due, start_date, due_date, end_date, status
+  ) values (
+    v_owner_gym_id, v_member_id, v_plan.id, v_plan.name, v_plan.price, v_start, v_start, v_end, 'pending'
+  ) returning id into v_membership_id;
+
+  return jsonb_build_object(
+    'success', true,
+    'member_id', v_member_id,
+    'membership_id', v_membership_id,
+    'full_name', trim(p_full_name),
+    'plan_name', v_plan.name,
+    'amount_due', v_plan.price
+  );
+end;
+$$;
+
+grant execute on function public.add_gym_member(text, text, text, uuid, date) to authenticated;
 
 -- 6. Initial Seed Data
 do $$

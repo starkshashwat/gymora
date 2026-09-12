@@ -161,8 +161,8 @@ class GymStore {
     return result;
   }
 
-  getMemberById(id: string): { member: MemberWithDetails; payments: Payment[] } | null {
-    const list = this.getMembersWithDetails();
+  getMemberById(id: string, gymId?: string): { member: MemberWithDetails; payments: Payment[] } | null {
+    const list = this.getMembersWithDetails(gymId);
     const member = list.find((m) => m.id === id);
     if (!member) return null;
 
@@ -290,6 +290,21 @@ class GymStore {
     return result;
   }
 
+  deleteMember(memberId: string, gymId?: string): boolean {
+    const memberIndex = this.members.findIndex(
+      (m) => m.id === memberId && (!gymId || m.gym_id === gymId)
+    );
+    if (memberIndex === -1) return false;
+
+    // Remove member
+    this.members.splice(memberIndex, 1);
+    // Remove memberships for this member
+    this.memberships = this.memberships.filter((m) => m.member_id !== memberId);
+    // Remove payments for this member
+    this.payments = this.payments.filter((p) => p.member_id !== memberId);
+    return true;
+  }
+
   recordPayment(params: {
     member_id: string;
     membership_id: string;
@@ -356,7 +371,47 @@ class GymStore {
 
   getPlans(gymId?: string): MembershipPlan[] {
     const gym = this.getGym(gymId);
-    return this.plans.filter((p) => p.gym_id === gym.id);
+    let gymPlans = this.plans.filter((p) => p.gym_id === gym.id);
+    if (gymPlans.length === 0) {
+      const defaultPlans: MembershipPlan[] = [
+        {
+          id: crypto.randomUUID(),
+          gym_id: gym.id,
+          name: 'Monthly Standard',
+          duration_days: 30,
+          price: 1500,
+          description: 'Full gym access with locker facilities',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: crypto.randomUUID(),
+          gym_id: gym.id,
+          name: 'Quarterly Pro',
+          duration_days: 90,
+          price: 4000,
+          description: 'Full gym access + 1 free trainer consultation',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        {
+          id: crypto.randomUUID(),
+          gym_id: gym.id,
+          name: 'Annual Elite',
+          duration_days: 365,
+          price: 14000,
+          description: 'Unlimited all-hours access + sauna & nutrition guide',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ];
+      this.plans.push(...defaultPlans);
+      gymPlans = defaultPlans;
+    }
+    return gymPlans;
   }
 
   savePlan(
@@ -620,6 +675,7 @@ class GymStore {
   }
 }
 
-// Global Singleton Store
-const globalStore = new GymStore();
-export const gymService = globalStore;
+// Global Singleton Store persisted on globalThis to prevent reload wipes in dev
+const globalForGym = globalThis as unknown as { gymStore?: GymStore };
+export const gymService = globalForGym.gymStore || new GymStore();
+globalForGym.gymStore = gymService;

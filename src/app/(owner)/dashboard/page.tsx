@@ -115,14 +115,22 @@ export default function DashboardPage() {
       }
     };
 
+    const handleToastNotification = (e: any) => {
+      if (e.detail?.title) {
+        showToast(e.detail.title, e.detail.subtitle);
+      }
+    };
+
     window.addEventListener('storage', handleStorage);
     window.addEventListener('gym:member-updated', () => loadDashboard(false));
+    window.addEventListener('gym:toast-notification', handleToastNotification);
 
     return () => {
       clearInterval(timer);
       if (bc) bc.close();
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('gym:member-updated', () => loadDashboard(false));
+      window.removeEventListener('gym:toast-notification', handleToastNotification);
     };
   }, []);
 

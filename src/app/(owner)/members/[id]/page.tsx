@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { MemberWithDetails, Payment } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
 import { formatDisplayDate } from '@/lib/utils/date';
@@ -22,15 +23,20 @@ import {
   HelpCircle,
   ShieldCheck,
   Loader2,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 export default function MemberDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
   const [member, setMember] = useState<MemberWithDetails | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -53,9 +59,30 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
   }, [params.id]);
 
   const handlePaymentSuccess = (res: any) => {
-    setToastMessage(`Payment of ₹${res.amount_recorded} recorded successfully!`);
+    setToastMessage(`Payment of ₹${res.amount_recorded || res.amount} recorded successfully!`);
     setTimeout(() => setToastMessage(null), 4000);
     loadData();
+  };
+
+  const handleDeleteMember = async () => {
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/members/${params.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete member');
+      }
+
+      window.dispatchEvent(new Event('gym:member-updated'));
+      router.push('/members');
+    } catch (err: any) {
+      alert(err.message || 'Error deleting member');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteConfirmOpen(false);
+    }
   };
 
   const getMethodBadge = (method: string) => {
@@ -195,6 +222,16 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
               <span>Up to Date</span>
             </div>
           )}
+
+          {/* Delete Member Button */}
+          <button
+            onClick={() => setIsDeleteConfirmOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700 hover:bg-rose-100 active:scale-95 transition"
+            title="Delete this member"
+          >
+            <Trash2 className="h-4 w-4 text-rose-600" />
+            <span>Delete</span>
+          </button>
         </div>
       </div>
 
@@ -218,63 +255,137 @@ export default function MemberDetailPage({ params }: { params: { id: string } })
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <span className="text-xs uppercase font-bold text-slate-400">Paid So Far</span>
             <div className="mt-1 text-lg font-black text-emerald-600">{formatINR(mship.total_paid)}</div>
-            <div className="mt-1 text-xs text-slate-500">Verified received</div>
+            <div className="mt-1 text-xs text-slate-500">Confirmed receipts</div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <span className="text-xs uppercase font-bold text-slate-400">Remaining Balance</span>
-            <div className={`mt-1 text-lg font-black ${hasOutstanding ? (mship.is_overdue ? 'text-rose-600' : 'text-amber-600') : 'text-emerald-600'}`}>
+            <span className="text-xs uppercase font-bold text-slate-400">Balance Pending</span>
+            <div className={`mt-1 text-lg font-black ${mship.outstanding_balance > 0 ? (mship.is_overdue ? 'text-rose-600' : 'text-amber-600') : 'text-slate-400'}`}>
               {formatINR(mship.outstanding_balance)}
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              {hasOutstanding
+              {mship.outstanding_balance > 0
                 ? mship.is_overdue
-                  ? `Overdue since ${formatDisplayDate(mship.due_date)}`
+                  ? `Due date was ${formatDisplayDate(mship.due_date)} (${mship.days_overdue}d overdue)`
                   : `Due on ${formatDisplayDate(mship.due_date)}`
-                : 'Fully settled'}
+                : 'Fully Settled'}
             </div>
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <Clock className="mx-auto h-8 w-8 text-slate-400" />
+          <h3 className="mt-2 text-base font-bold text-slate-900">No Active Membership Plan</h3>
+          <p className="text-sm text-slate-500 mt-1">This member does not have an active billing cycle assigned.</p>
+        </div>
+      )}
 
-      {/* Payment History (Immutable Financial Records) */}
+      {/* Payment History Table */}
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-slate-100 p-5">
-          <h2 className="text-lg font-bold text-slate-900">Payment History</h2>
-          <p className="text-xs text-slate-500">Immutable financial ledger of all transactions.</p>
+          <h3 className="text-base font-bold text-slate-900">Payment History</h3>
+          <p className="text-xs text-slate-500">All recorded transactions for this member.</p>
         </div>
 
         {payments.length === 0 ? (
-          <div className="py-12 text-center text-sm font-medium text-slate-400">
-            No payments recorded yet for this member.
+          <div className="py-12 text-center">
+            <Banknote className="mx-auto h-8 w-8 text-slate-300" />
+            <p className="mt-2 text-sm font-semibold text-slate-500">No payment records found.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {payments.map((p) => (
-              <div key={p.id} className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-slate-900">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-5">Date</th>
+                  <th className="py-3 px-5">Amount</th>
+                  <th className="py-3 px-5">Method</th>
+                  <th className="py-3 px-5">Notes</th>
+                  <th className="py-3 px-5 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {payments.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                    <td className="py-3.5 px-5 font-medium text-slate-700">
+                      {formatDisplayDate(p.paid_at)}
+                    </td>
+                    <td className="py-3.5 px-5 font-black text-slate-900">
                       {formatINR(p.amount)}
-                    </span>
-                    {getMethodBadge(p.payment_method)}
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 uppercase">
-                      {p.status}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Paid: {formatDisplayDate(p.paid_at)} {p.notes && `• "${p.notes}"`}
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-400 font-mono">
-                  TX: {p.id.slice(0, 12)}
-                </div>
-              </div>
-            ))}
+                    </td>
+                    <td className="py-3.5 px-5">
+                      {getMethodBadge(p.payment_method)}
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-500 text-xs">
+                      {p.notes || '—'}
+                    </td>
+                    <td className="py-3.5 px-5 text-right">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 uppercase">
+                        <CheckCircle className="h-3 w-3" /> Paid
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      {/* Delete Member Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-900">Delete Member</h3>
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm text-slate-600">
+              <p>
+                Are you sure you want to permanently delete <strong className="text-slate-900">{member.full_name}</strong>?
+              </p>
+              <p className="mt-2 text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200 font-medium">
+                ⚠️ All membership cycles and payment records for this member will be permanently deleted from the database.
+              </p>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeleting}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteMember}
+                disabled={isDeleting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mark Paid Modal */}
       <MarkPaidModal

@@ -75,6 +75,17 @@ export default function AddMemberModal({
         throw new Error(data.error || 'Failed to add member');
       }
 
+      // Notify owner that member was successfully saved to database
+      window.dispatchEvent(
+        new CustomEvent('gym:toast-notification', {
+          detail: {
+            title: '✅ Member Saved to Database!',
+            subtitle: `${fullName.trim()} has been successfully saved to your database.`,
+            type: 'success',
+          },
+        })
+      );
+
       onMemberAdded();
       onClose();
       // Reset form
