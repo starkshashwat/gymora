@@ -1,15 +1,27 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { getPublicOrigin } from '@/lib/utils/url';
+import { getPublicOrigin } from './lib/utils/url';
+
+const RESERVED_SUBDOMAINS = new Set([
+  'www',
+  'app',
+  'api',
+  'admin',
+  'gymora',
+  'coolify',
+  'auth',
+  'mail',
+  'smtp',
+]);
 
 /**
  * Extracts gym slug subdomain from the incoming Host header.
  * Supports:
  * - Localhost development: [slug].localhost:3000 or [slug].localhost
- * - Production: [slug].gymora.fit
- * Ignores reserved subdomains like www, app, api, admin.
+ * - Production: [slug].gymora.fit or [slug].gymora.swadyum.store
+ * Ignores reserved subdomains and main app root domains like gymora.swadyum.store.
  */
-function getSubdomain(host: string): string | null {
+export function getSubdomain(host: string): string | null {
   if (!host) return null;
   const hostname = host.split(':')[0].toLowerCase();
 
@@ -18,19 +30,49 @@ function getSubdomain(host: string): string | null {
     return null;
   }
 
+  // Exact root application domains
+  if (
+    hostname === 'gymora.fit' ||
+    hostname === 'www.gymora.fit' ||
+    hostname === 'gymora.swadyum.store' ||
+    hostname === 'www.gymora.swadyum.store' ||
+    hostname === 'swadyum.store' ||
+    hostname === 'www.swadyum.store'
+  ) {
+    return null;
+  }
+
   // Localhost pattern: e.g. "iron-pulse.localhost"
   if (hostname.endsWith('.localhost')) {
     const sub = hostname.replace('.localhost', '');
-    if (sub && !['www', 'app', 'api', 'admin'].includes(sub)) {
+    if (sub && !RESERVED_SUBDOMAINS.has(sub)) {
       return sub;
     }
   }
 
-  // Production domain pattern: e.g. "iron-pulse.gymora.fit"
+  // If domain is on *.gymora.swadyum.store, e.g. "iron-pulse.gymora.swadyum.store"
+  if (hostname.endsWith('.gymora.swadyum.store')) {
+    const sub = hostname.replace('.gymora.swadyum.store', '');
+    if (sub && !RESERVED_SUBDOMAINS.has(sub)) {
+      return sub;
+    }
+    return null;
+  }
+
+  // If domain is on *.gymora.fit, e.g. "iron-pulse.gymora.fit"
+  if (hostname.endsWith('.gymora.fit')) {
+    const sub = hostname.replace('.gymora.fit', '');
+    if (sub && !RESERVED_SUBDOMAINS.has(sub)) {
+      return sub;
+    }
+    return null;
+  }
+
+  // Production domain pattern with reserved checks: e.g. "iron-pulse.domain.com"
   const parts = hostname.split('.');
   if (parts.length >= 3) {
     const sub = parts[0];
-    if (sub && !['www', 'app', 'api', 'admin'].includes(sub)) {
+    if (sub && !RESERVED_SUBDOMAINS.has(sub)) {
       return sub;
     }
   }

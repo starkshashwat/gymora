@@ -1,33 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-/**
- * Subdomain resolution logic mirrored from src/middleware.ts
- */
-function getSubdomain(host: string): string | null {
-  if (!host) return null;
-  const hostname = host.split(':')[0].toLowerCase();
-
-  if (hostname === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    return null;
-  }
-
-  if (hostname.endsWith('.localhost')) {
-    const sub = hostname.replace('.localhost', '');
-    if (sub && !['www', 'app', 'api', 'admin'].includes(sub)) {
-      return sub;
-    }
-  }
-
-  const parts = hostname.split('.');
-  if (parts.length >= 3) {
-    const sub = parts[0];
-    if (sub && !['www', 'app', 'api', 'admin'].includes(sub)) {
-      return sub;
-    }
-  }
-
-  return null;
-}
+import { getSubdomain } from '../src/middleware';
 
 /**
  * Route protection logic mirrored from src/middleware.ts
@@ -76,6 +49,7 @@ describe('Middleware Subdomain Resolution & Security Routing', () => {
     it('detects production subdomains accurately', () => {
       expect(getSubdomain('iron-pulse.gymora.fit')).toBe('iron-pulse');
       expect(getSubdomain('fitzone.gymora.fit:443')).toBe('fitzone');
+      expect(getSubdomain('iron-pulse.gymora.swadyum.store')).toBe('iron-pulse');
     });
 
     it('ignores non-subdomain roots and reserved prefixes', () => {
@@ -83,6 +57,9 @@ describe('Middleware Subdomain Resolution & Security Routing', () => {
       expect(getSubdomain('127.0.0.1:3000')).toBeNull();
       expect(getSubdomain('gymora.fit')).toBeNull();
       expect(getSubdomain('www.gymora.fit')).toBeNull();
+      expect(getSubdomain('gymora.swadyum.store')).toBeNull();
+      expect(getSubdomain('www.gymora.swadyum.store')).toBeNull();
+      expect(getSubdomain('swadyum.store')).toBeNull();
       expect(getSubdomain('app.gymora.fit')).toBeNull();
       expect(getSubdomain('api.gymora.fit')).toBeNull();
       expect(getSubdomain('admin.localhost:3000')).toBeNull();
