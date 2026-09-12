@@ -114,8 +114,8 @@ export async function GET(request: NextRequest) {
         console.error('Supabase dashboard error:', dbErr);
         throw dbErr;
       }
-    } else {
-      // Fallback for demo mode
+    } else if (isDemoMode) {
+      // Fallback for demo mode ONLY
       metrics = gymService.getDashboardMetrics(gymId);
       const allMembers = gymService.getMembersWithDetails(gymId, '', 'all', 1, 99999).members;
       pendingRegistrations = gymService.getRegistrations(gymId).filter((r) => r.status === 'pending');
@@ -129,6 +129,8 @@ export async function GET(request: NextRequest) {
         const mem = allMembers.find((m) => m.id === p.member_id);
         return { ...p, member_name: mem?.full_name || 'Member' };
       });
+    } else {
+      return NextResponse.json({ success: false, error: 'Unauthorized state' }, { status: 401 });
     }
 
     const response = NextResponse.json({

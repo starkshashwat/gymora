@@ -66,8 +66,8 @@ export async function resolveCurrentGym(
     }
   }
 
-  // 4. Fallback to active gym cookie for owner sessions ONLY if session cookie is present
-  if (!gymId && sessionCookie && gymCookie && gymCookie !== initialGym.id) {
+  // 4. Fallback to active gym cookie for owner sessions ONLY if session cookie is present AND user is authenticated
+  if (!gymId && user && sessionCookie && gymCookie && gymCookie !== initialGym.id) {
     gymId = gymCookie;
   }
 
@@ -256,13 +256,18 @@ export async function recordPaymentInDatabase(
   // Persist to Supabase as single source of truth if authenticated
   if (user && supabase) {
     const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_payment', {
-      p_gym_id: gymId,
       p_member_id: params.member_id,
       p_membership_id: params.membership_id,
       p_amount: params.amount,
       p_payment_method: params.payment_method,
       p_notes: params.notes || null,
       p_idempotency_key: params.idempotency_key || null,
+      p_payload_hash: params.idempotency_key ? JSON.stringify({
+        m: params.member_id,
+        ms: params.membership_id,
+        a: params.amount,
+        p: params.payment_method
+      }) : 'none',
     });
 
     if (rpcErr) {
@@ -300,12 +305,15 @@ export async function approveRegistrationInDatabase(
   // If user is authenticated, execute in Supabase as source of truth
   if (user && supabase) {
     const { data: rpcRes, error: rpcErr } = await supabase.rpc('convert_registration', {
-      p_gym_id: gymId,
       p_registration_id: params.registration_id,
       p_amount_paid: params.payment_received ? (params.amount_received || 0) : 0,
       p_payment_method: params.payment_method || 'cash',
       p_notes: params.notes || null,
       p_idempotency_key: params.idempotency_key || null,
+      p_payload_hash: params.idempotency_key ? JSON.stringify({
+        r: params.registration_id,
+        a: params.payment_received ? (params.amount_received || 0) : 0
+      }) : 'none',
     });
 
     if (rpcErr) {
@@ -428,13 +436,17 @@ export async function renewMemberInDatabase(
 
   if (user && supabase) {
     const { data: rpcRes, error: rpcErr } = await supabase.rpc('renew_membership', {
-      p_gym_id: gymId,
       p_member_id: params.member_id,
       p_plan_id: params.plan_id,
       p_start_date: params.start_date || new Date().toISOString().slice(0, 10),
       p_amount_paid: params.amount_paid || 0,
       p_payment_method: params.payment_method || 'cash',
       p_idempotency_key: params.idempotency_key || null,
+      p_payload_hash: params.idempotency_key ? JSON.stringify({
+        m: params.member_id,
+        pl: params.plan_id,
+        a: params.amount_paid
+      }) : 'none',
     });
 
     if (rpcErr) {

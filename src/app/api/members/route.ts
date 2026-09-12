@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     if (!gymId && !isDemoMode) {
-      return NextResponse.json({ success: true, members: [], totalCount: 0 });
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const { members, totalCount } = gymService.getMembersWithDetails(gymId, query, filter, page, limit);

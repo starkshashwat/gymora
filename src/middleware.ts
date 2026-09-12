@@ -65,7 +65,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/members') ||
     pathname.startsWith('/plans') ||
     pathname.startsWith('/registrations') ||
-    pathname.startsWith('/qr');
+    pathname.startsWith('/qr') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/api/dashboard') ||
+    pathname.startsWith('/api/members') ||
+    pathname.startsWith('/api/payments') ||
+    pathname.startsWith('/api/settings');
 
   // Let public non-login, non-root routes pass immediately
   if (!isProtectedRoute && pathname !== '/login' && pathname !== '/') {

@@ -8,50 +8,30 @@ export async function GET(
 ) {
   try {
     const cleanSlug = params.slug.toLowerCase().trim();
-    let data = gymService.getPublicGymBySlug(cleanSlug);
-
-    // Database fallback if gym was newly registered or memory was re-initialized
-    if (!data) {
-      try {
-        const supabase = createClient();
-        const { data: gymRow } = await supabase
-          .from('gyms')
-          .select('id, name, slug, phone, email, address, logo_url, custom_domain')
-          .or(`slug.eq.${cleanSlug},custom_domain.eq.${cleanSlug}`)
-          .maybeSingle();
-
-        if (gymRow) {
-          const { data: plansRows } = await supabase
-            .from('membership_plans')
-            .select('*')
-            .eq('gym_id', gymRow.id)
-            .eq('is_active', true);
-
-          return NextResponse.json({
-            success: true,
-            gym: {
-              name: gymRow.name,
-              slug: gymRow.slug,
-              phone: gymRow.phone,
-              email: gymRow.email,
-              address: gymRow.address,
-              logo_url: gymRow.logo_url,
-            },
-            plans: (plansRows || []).map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              duration_days: p.duration_days,
-              price: Number(p.price),
-              description: p.description,
-              image_url: p.image_url,
-              features: p.features || [],
-            })),
-          });
-        }
-      } catch (dbErr) {
-        console.warn('Database fallback lookup error in GET /api/public/join:', dbErr);
+    // Use the safe public RPC for database lookup
+    const supabase = createClient();
+    let dbResult = null;
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('get_public_gym_details', {
+        p_slug_or_domain: cleanSlug,
+      });
+      if (!rpcErr && rpcRes && rpcRes.gym) {
+        dbResult = rpcRes;
       }
+    } catch (dbErr) {
+      console.warn('Database fallback lookup error in GET /api/public/join:', dbErr);
+    }
 
+    if (dbResult) {
+      return NextResponse.json({
+        success: true,
+        ...dbResult
+      });
+    }
+
+    // Memory fallback if DB fails
+    let data = gymService.getPublicGymBySlug(cleanSlug);
+    if (!data) {
       return NextResponse.json({ success: false, error: 'Gym not found' }, { status: 404 });
     }
 

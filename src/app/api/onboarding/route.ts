@@ -55,7 +55,19 @@ export async function POST(request: NextRequest) {
           console.warn("Could not insert gym to Supabase table:", gymErr);
         }
 
-        // 3.5 Persist initial plans to Supabase membership_plans table
+        // 3.5 Update profiles table so RLS policies pass for membership_plans
+        try {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            gym_id: result.gym_id,
+            role: 'owner',
+            full_name: `${body.gym_name} Owner`,
+          });
+        } catch (profileErr) {
+          console.warn("Could not upsert profile to Supabase table:", profileErr);
+        }
+
+        // 4. Persist initial plans to Supabase membership_plans table
         if (body.plans && body.plans.length > 0) {
           try {
             const plansToInsert = body.plans.map((p) => ({
@@ -72,18 +84,6 @@ export async function POST(request: NextRequest) {
           } catch (planErr) {
             console.warn("Could not insert plans to Supabase:", planErr);
           }
-        }
-
-        // 4. Update profiles table
-        try {
-          await supabase.from('profiles').upsert({
-            id: user.id,
-            gym_id: result.gym_id,
-            role: 'owner',
-            full_name: `${body.gym_name} Owner`,
-          });
-        } catch (profileErr) {
-          console.warn("Could not upsert profile to Supabase table:", profileErr);
         }
       }
     } catch (err) {
