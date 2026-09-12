@@ -13,10 +13,11 @@ import {
   UserCheck,
   Menu,
   X,
-  PlusCircle,
+  Plus,
   Bell,
   LogOut,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface NavbarProps {
   onAddMemberClick?: () => void;
@@ -45,7 +46,7 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
         const count = data.registrations.filter((r: any) => r.status === 'pending').length;
         setPendingCount(count);
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   };
@@ -97,28 +98,28 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
   ];
 
   return (
-    <nav className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
+    <nav className="sticky top-0 z-40 border-b border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 transition-colors">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Brand Logo & Name: Gymora */}
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-md group-hover:bg-emerald-600 transition">
-                <Dumbbell className="h-5 w-5 text-emerald-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-sm dark:bg-zinc-50 dark:text-zinc-900 transition-transform group-hover:scale-105">
+                <Dumbbell className="h-5 w-5 text-emerald-400 dark:text-emerald-600" />
               </div>
               <div>
-                <span className="font-black text-slate-900 text-xl tracking-tight block leading-tight">
+                <span className="font-semibold text-zinc-900 dark:text-zinc-50 text-lg tracking-tight block leading-tight">
                   Gymora
                 </span>
-                <span className="text-[10px] uppercase font-extrabold tracking-widest text-emerald-600 block">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-400 block">
                   Fitness CRM
                 </span>
               </div>
             </Link>
           </div>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-1">
+          {/* Desktop Navigation Links — Sleek Pill Styling */}
+          <div className="hidden md:flex items-center gap-1.5 bg-zinc-100/70 dark:bg-zinc-900 p-1 rounded-full border border-zinc-200/60 dark:border-zinc-800">
             {navLinks.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -126,16 +127,17 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+                  className={cn(
+                    "relative flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all",
                     isActive
-                      ? 'bg-slate-100 text-slate-900'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                      ? "bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 shadow-sm"
+                      : "text-zinc-600 hover:text-zinc-950 hover:bg-white/80 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800",
+                  )}
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  <Icon className={cn("h-3.5 w-3.5", isActive ? "text-emerald-400" : "text-zinc-400")} />
                   <span>{item.label}</span>
                   {item.badge ? (
-                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-black text-white shadow-sm animate-pulse">
+                    <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm animate-pulse">
                       {item.badge}
                     </span>
                   ) : null}
@@ -144,25 +146,26 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
             })}
           </div>
 
-          {/* Actions: Add Member & Mobile Toggle */}
-          <div className="flex items-center gap-2.5">
+          {/* Actions: Add Member & Exit Buttons */}
+          <div className="flex items-center gap-2">
             {pendingCount > 0 && (
               <Link
                 href="/registrations"
-                className="hidden sm:flex items-center gap-1.5 rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 border border-amber-200 hover:bg-amber-100 transition"
+                className="hidden sm:flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 transition"
                 title={`${pendingCount} pending registrations`}
               >
                 <Bell className="h-3.5 w-3.5 text-amber-600 animate-bounce" />
-                <span>{pendingCount} New Signups</span>
+                <span>{pendingCount} New</span>
               </Link>
             )}
 
             {onAddMemberClick && (
               <button
+                type="button"
                 onClick={onAddMemberClick}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-sm font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-zinc-900 px-4 text-xs font-medium text-zinc-50 shadow-sm transition hover:bg-zinc-800 active:scale-95 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
               >
-                <PlusCircle className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Add Member</span>
               </button>
             )}
@@ -171,19 +174,20 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
             <button
               type="button"
               onClick={handleSignOut}
-              className="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 hover:text-rose-600 transition"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3.5 text-xs font-medium text-zinc-600 shadow-sm transition hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900"
               title="Sign out of Gymora"
             >
-              <LogOut className="h-4 w-4" />
-              <span>Exit</span>
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Exit</span>
             </button>
 
+            {/* Mobile Menu Toggle */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-xl p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+              className="rounded-full p-2 text-zinc-600 hover:bg-zinc-100 md:hidden dark:text-zinc-400 dark:hover:bg-zinc-900"
             >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
@@ -191,8 +195,8 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="border-b border-slate-200 bg-white px-4 pt-2 pb-4 md:hidden animate-in slide-in-from-top-2">
-          <div className="space-y-1">
+        <div className="border-b border-zinc-200 bg-white px-4 pt-3 pb-5 md:hidden dark:border-zinc-800 dark:bg-zinc-950 animate-in slide-in-from-top-2">
+          <div className="space-y-1.5">
             {navLinks.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -201,18 +205,19 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-base font-semibold ${
+                  className={cn(
+                    "flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-medium transition",
                     isActive
-                      ? 'bg-slate-100 text-slate-900'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
+                      ? "bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900",
+                  )}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`h-5 w-5 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                    <Icon className={cn("h-4 w-4", isActive ? "text-emerald-400" : "text-zinc-400")} />
                     <span>{item.label}</span>
                   </div>
                   {item.badge ? (
-                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white">
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">
                       {item.badge}
                     </span>
                   ) : null}
@@ -221,16 +226,16 @@ export default function Navbar({ onAddMemberClick }: NavbarProps) {
             })}
 
             {/* Mobile Sign Out */}
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   handleSignOut();
                 }}
-                className="w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-base font-semibold text-rose-600 hover:bg-rose-50 transition"
+                className="w-full flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition"
               >
-                <LogOut className="h-5 w-5 text-rose-500" />
+                <LogOut className="h-4 w-4 text-rose-500" />
                 <span>Sign Out</span>
               </button>
             </div>
