@@ -15,6 +15,7 @@ import {
   X,
   LogOut,
   Bell,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -103,6 +104,12 @@ export default function Sidebar() {
       label: 'TOOLS',
       items: [
         { href: '/qr', label: 'Gym QR', icon: QrCode },
+      ]
+    },
+    {
+      label: 'CONFIGURATION',
+      items: [
+        { href: '/settings', label: 'Settings', icon: SettingsIcon },
       ]
     }
   ];

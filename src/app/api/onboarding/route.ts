@@ -44,13 +44,34 @@ export async function POST(request: NextRequest) {
             name: body.gym_name.trim(),
             slug: result.gym_slug,
             phone: body.phone,
+            email: body.email?.trim() || null,
             address: body.address?.trim() || null,
+            logo_url: body.logo_url?.trim() || null,
             payment_mode: body.payment_mode || 'local_qr',
             upi_id: body.upi_id?.trim() || null,
             whatsapp_mode: body.whatsapp_mode || 'local_click_to_chat',
           });
         } catch (gymErr) {
           console.warn("Could not insert gym to Supabase table:", gymErr);
+        }
+
+        // 3.5 Persist initial plans to Supabase membership_plans table
+        if (body.plans && body.plans.length > 0) {
+          try {
+            const plansToInsert = body.plans.map((p) => ({
+              gym_id: result.gym_id,
+              name: p.name,
+              duration_days: p.duration_days,
+              price: p.price,
+              description: p.description || null,
+              image_url: p.image_url || null,
+              features: p.features || [],
+              is_active: true,
+            }));
+            await supabase.from('membership_plans').insert(plansToInsert);
+          } catch (planErr) {
+            console.warn("Could not insert plans to Supabase:", planErr);
+          }
         }
 
         // 4. Update profiles table

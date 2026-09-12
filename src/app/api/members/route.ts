@@ -10,7 +10,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
-    const filter = (searchParams.get('filter') || 'all') as 'all' | 'paid' | 'due' | 'overdue';
+    const filter = (searchParams.get('filter') || 'all') as
+      | 'all'
+      | 'paid'
+      | 'due'
+      | 'overdue'
+      | 'paused'
+      | 'cancelled';
 
     if (!gymId && !isDemoMode) {
       return NextResponse.json({ success: true, members: [] });

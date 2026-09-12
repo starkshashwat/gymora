@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { RegistrationRequest } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
 import { formatDisplayDate } from '@/lib/utils/date';
+import ReviewRegistrationModal from '@/components/registrations/ReviewRegistrationModal';
 import {
   UserCheck,
   Phone,
@@ -16,12 +17,15 @@ import {
   Sparkles,
   Loader2,
   ArrowRight,
+  ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 
 export default function RegistrationsPage() {
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [selectedReg, setSelectedReg] = useState<RegistrationRequest | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const loadRegistrations = async () => {
@@ -30,7 +34,7 @@ export default function RegistrationsPage() {
       const res = await fetch('/api/registrations');
       const data = await res.json();
       if (data.success) {
-        setRegistrations(data.registrations);
+        setRegistrations(data.registrations || []);
       }
     } catch (e) {
       console.error(e);
@@ -43,35 +47,23 @@ export default function RegistrationsPage() {
     loadRegistrations();
   }, []);
 
-  const handleConvert = async (id: string) => {
-    try {
-      setConvertingId(id);
-      const res = await fetch('/api/registrations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registration_id: id }),
-      });
+  const handleOpenReview = (reg: RegistrationRequest) => {
+    setSelectedReg(reg);
+    setIsReviewOpen(true);
+  };
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to convert registration');
-      }
-
-      setToastMessage('Registration successfully converted to Active Member!');
-      setTimeout(() => setToastMessage(null), 4000);
-      loadRegistrations();
-    } catch (err: any) {
-      alert(err.message || 'Error converting registration');
-    } finally {
-      setConvertingId(null);
-    }
+  const handleApproved = (result: any) => {
+    setToastMessage(`Member ${result.member?.full_name || 'record'} successfully enrolled!`);
+    setTimeout(() => setToastMessage(null), 4000);
+    loadRegistrations();
+    window.dispatchEvent(new Event('gym:member-updated'));
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6 pb-12">
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-top-4">
-          <CheckCircle className="h-5 w-5 text-emerald-400" />
+          <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -124,15 +116,22 @@ export default function RegistrationsPage() {
                 className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition"
               >
                 <div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
                     <h3 className="text-base font-bold text-slate-900">{reg.full_name}</h3>
                     {reg.status === 'converted' ? (
-                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-600">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                        <CheckCircle className="h-3 w-3 text-emerald-600" />
                         Converted to Member
                       </span>
                     ) : (
-                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-                        New Submission (Payment Pending)
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                        <Clock className="h-3 w-3 text-amber-600" />
+                        Pending Review
+                      </span>
+                    )}
+                    {reg.whatsapp_opt_in && (
+                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                        WA Opt-in
                       </span>
                     )}
                   </div>
@@ -169,21 +168,11 @@ export default function RegistrationsPage() {
                     </Link>
                   ) : (
                     <button
-                      onClick={() => handleConvert(reg.id)}
-                      disabled={convertingId === reg.id}
-                      className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 disabled:opacity-50 transition"
+                      onClick={() => handleOpenReview(reg)}
+                      className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 active:scale-95 transition"
                     >
-                      {convertingId === reg.id ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span>Converting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserCheck className="h-4 w-4" />
-                          <span>Approve & Convert to Member</span>
-                        </>
-                      )}
+                      <UserCheck className="h-4 w-4" />
+                      <span>Review & Approve</span>
                     </button>
                   )}
                 </div>
@@ -192,6 +181,14 @@ export default function RegistrationsPage() {
           </div>
         )}
       </div>
+
+      {/* Review & Approval Modal */}
+      <ReviewRegistrationModal
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        registration={selectedReg}
+        onApproved={handleApproved}
+      />
     </div>
   );
 }

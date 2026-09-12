@@ -268,3 +268,128 @@ export async function recordPaymentInDatabase(
 
   return result;
 }
+
+/**
+ * Approve registration and create member with payment in database and in-memory store.
+ */
+export async function approveRegistrationInDatabase(
+  params: {
+    registration_id: string;
+    payment_received?: boolean;
+    amount_received?: number;
+    payment_method?: PaymentMethod;
+    notes?: string;
+  },
+  gymId: string,
+  supabase: any,
+  user: any
+) {
+  // Always update memory store
+  const memResult = gymService.approveRegistrationWithPayment({
+    ...params,
+    gym_id: gymId,
+  });
+
+  // If user is authenticated, execute in Supabase
+  if (user && supabase) {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('approve_registration_and_create_member', {
+        p_registration_id: params.registration_id,
+        p_payment_received: !!params.payment_received,
+        p_amount_received: params.amount_received || 0,
+        p_payment_method: params.payment_method || 'cash',
+        p_notes: params.notes || null,
+      });
+
+      if (!rpcErr && rpcRes?.success) {
+        return rpcRes;
+      }
+    } catch (e) {
+      console.warn('Supabase approve_registration warning:', e);
+    }
+  }
+
+  return memResult;
+}
+
+/**
+ * Cancel membership in database and in-memory store.
+ */
+export async function cancelMembershipInDatabase(
+  membershipId: string,
+  reason: string | undefined,
+  gymId: string,
+  supabase: any,
+  user: any
+) {
+  const memResult = gymService.cancelMembership(membershipId, reason, gymId);
+
+  if (user && supabase) {
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('cancel_membership', {
+        p_membership_id: membershipId,
+        p_reason: reason || null,
+      });
+
+      if (rpcErr) {
+        await supabase
+          .from('memberships')
+          .update({
+            lifecycle: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancellation_reason: reason || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', membershipId);
+      }
+    } catch (e) {
+      console.warn('Supabase cancel_membership warning:', e);
+    }
+  }
+
+  return memResult;
+}
+
+/**
+ * Pause membership in database and in-memory store.
+ */
+export async function pauseMembershipInDatabase(
+  membershipId: string,
+  gymId: string,
+  supabase: any,
+  user: any
+) {
+  const memResult = gymService.pauseMembership(membershipId, gymId);
+
+  if (user && supabase) {
+    try {
+      await supabase.rpc('pause_membership', { p_membership_id: membershipId });
+    } catch (e) {
+      console.warn('Supabase pause_membership warning:', e);
+    }
+  }
+
+  return memResult;
+}
+
+/**
+ * Reactivate membership in database and in-memory store.
+ */
+export async function reactivateMembershipInDatabase(
+  membershipId: string,
+  gymId: string,
+  supabase: any,
+  user: any
+) {
+  const memResult = gymService.reactivateMembership(membershipId, gymId);
+
+  if (user && supabase) {
+    try {
+      await supabase.rpc('reactivate_membership', { p_membership_id: membershipId });
+    } catch (e) {
+      console.warn('Supabase reactivate_membership warning:', e);
+    }
+  }
+
+  return memResult;
+}

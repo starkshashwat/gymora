@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const { gymId, user } = await resolveCurrentGym(request, supabase);
 
     const body = await request.json();
-    const { id, name, duration_days, price, description, is_active } = body;
+    const { id, name, duration_days, price, description, image_url, features, is_active } = body;
 
     if (!name || duration_days === undefined || price === undefined) {
       return NextResponse.json(
@@ -37,6 +37,8 @@ export async function POST(request: NextRequest) {
         duration_days: Number(duration_days),
         price: Number(price),
         description,
+        image_url: image_url || null,
+        features: Array.isArray(features) ? features : [],
         is_active,
       },
       gymId
@@ -52,6 +54,8 @@ export async function POST(request: NextRequest) {
           duration_days: savedPlan.duration_days,
           price: savedPlan.price,
           description: savedPlan.description,
+          image_url: savedPlan.image_url,
+          features: savedPlan.features,
           is_active: savedPlan.is_active,
         });
       } catch (err) {

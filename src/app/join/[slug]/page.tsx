@@ -15,6 +15,7 @@ import {
   Mail,
   Loader2,
   AlertCircle,
+  MessageCircle,
 } from 'lucide-react';
 
 interface GymPublicData {
@@ -37,6 +38,7 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +55,8 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
           return;
         }
         setGym(data.gym);
-        setPlans(data.plans);
-        if (data.plans.length > 0) {
+        setPlans(data.plans || []);
+        if (data.plans && data.plans.length > 0) {
           setSelectedPlanId(data.plans[0].id);
         }
       } catch (e) {
@@ -123,6 +125,7 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
           phone: phone.trim(),
           email: email.trim() || undefined,
           plan_id: selectedPlanId,
+          whatsapp_opt_in: whatsappOptIn,
         }),
       });
 
@@ -216,7 +219,7 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Enter Your Details</h2>
                 <p className="text-xs text-slate-500">
-                  Fill in your basic information to get started.
+                  Fill in your basic information to get registered.
                 </p>
               </div>
 
@@ -270,6 +273,20 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
                 </div>
               </div>
 
+              {/* WhatsApp Opt-in Consent */}
+              <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3.5 border border-slate-200">
+                <input
+                  type="checkbox"
+                  id="waOptInCheck"
+                  checked={whatsappOptIn}
+                  onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <label htmlFor="waOptInCheck" className="text-xs text-slate-700 cursor-pointer select-none leading-relaxed">
+                  I agree to receive membership reminders and payment updates from <strong>{gym.name}</strong> on WhatsApp.
+                </label>
+              </div>
+
               <div className="pt-2">
                 <button
                   type="submit"
@@ -287,7 +304,7 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Select Membership Plan</h2>
-                <p className="text-xs text-slate-500">Choose the plan that suits your fitness goals.</p>
+                <p className="text-xs text-slate-500">Choose the plan that suits your fitness routine.</p>
               </div>
 
               <div className="space-y-3">
@@ -297,19 +314,45 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
                     <div
                       key={p.id}
                       onClick={() => setSelectedPlanId(p.id)}
-                      className={`cursor-pointer rounded-2xl border p-4 transition ${
+                      className={`cursor-pointer overflow-hidden rounded-2xl border transition ${
                         isSelected
-                          ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-600 shadow-sm'
-                          : 'border-slate-200 hover:border-slate-300'
+                          ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-600 shadow-md'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-slate-900 text-base">{p.name}</h3>
-                        <span className="text-base font-black text-emerald-700">{formatINR(p.price)}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
-                        <span>Duration: {p.duration_days} days</span>
-                        {p.description && <span className="italic">{p.description}</span>}
+                      {p.image_url && (
+                        <div className="aspect-video w-full overflow-hidden bg-slate-900">
+                          <img
+                            src={p.image_url}
+                            alt={p.name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold text-slate-900 text-base">{p.name}</h3>
+                          <span className="text-base font-black text-emerald-700">{formatINR(p.price)}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Duration: {p.duration_days} days
+                        </div>
+                        {p.description && (
+                          <p className="mt-1 text-xs text-slate-600 italic">{p.description}</p>
+                        )}
+                        {p.features && p.features.length > 0 && (
+                          <div className="mt-3 border-t border-slate-100 pt-2 space-y-1">
+                            {p.features.map((feat, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-700">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                <span>{feat}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -367,6 +410,12 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
                   <span>Payable Amount:</span>
                   <span className="text-lg font-black">{formatINR(selectedPlan?.price)}</span>
                 </div>
+                <div className="border-t border-slate-200 pt-2 flex justify-between text-xs">
+                  <span className="text-slate-500">WhatsApp Updates:</span>
+                  <strong className={whatsappOptIn ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                    {whatsappOptIn ? 'Consent Given' : 'Not Opted-In'}
+                  </strong>
+                </div>
               </div>
 
               <div className="rounded-xl bg-blue-50 p-3 text-xs text-blue-800 border border-blue-200 flex items-start gap-2">
@@ -399,7 +448,7 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
                   ) : (
                     <>
                       <CheckCircle2 className="h-4 w-4" />
-                      <span>Submit Registration</span>
+                      <span>Confirm & Register</span>
                     </>
                   )}
                 </button>
@@ -407,37 +456,52 @@ export default function PublicJoinPage({ params }: { params: { slug: string } })
             </div>
           )}
 
-          {/* STEP 4: Success & Payment Pending Confirmation */}
+          {/* STEP 4: Success Screen */}
           {step === 4 && (
-            <div className="text-center py-4 space-y-4">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-inner">
+            <div className="py-6 text-center space-y-4 animate-in zoom-in-95 duration-200">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                 <CheckCircle2 className="h-10 w-10" />
               </div>
 
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Registration Submitted!</h2>
-                <div className="mt-2 inline-block rounded-full bg-amber-100 px-3.5 py-1 text-xs font-bold text-amber-800">
-                  Payment Status: Pending
+                <h2 className="text-xl font-black text-slate-900">Registration Received!</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Welcome to <strong>{gym.name}</strong>, {fullName}!
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200 text-xs text-slate-600 space-y-1.5 text-left">
+                <div className="flex justify-between">
+                  <span>Selected Plan:</span>
+                  <span className="font-bold text-slate-900">{selectedPlan?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Amount to Pay:</span>
+                  <span className="font-bold text-slate-900">{formatINR(selectedPlan?.price)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Payment Location:</span>
+                  <span className="font-bold text-emerald-700">Reception Desk</span>
                 </div>
               </div>
 
-              <p className="text-xs text-slate-600 leading-relaxed max-w-xs mx-auto">
-                Thank you, <strong>{fullName}</strong>! Your registration for{' '}
-                <strong>{submittedData?.plan_name}</strong> ({formatINR(submittedData?.price)}) has been received by{' '}
-                <strong>{gym.name}</strong>.
-              </p>
-
-              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200 text-left text-xs text-slate-600 space-y-2">
-                <div className="font-bold text-slate-900">Next Step:</div>
-                <div>
-                  Please visit the reception counter to complete your payment via <strong>Cash</strong> or <strong>UPI</strong> and collect your gym access pass.
-                </div>
+              <div className="rounded-xl bg-emerald-50 p-3 text-xs text-emerald-800 border border-emerald-200">
+                Please proceed to the gym reception counter to verify your details and complete your membership activation.
               </div>
 
-              <div className="pt-2 flex items-center justify-center gap-2 text-xs text-slate-400">
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                <span>Verified Gym Partner Onboarding</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  setFullName('');
+                  setPhone('');
+                  setEmail('');
+                  setWhatsappOptIn(false);
+                }}
+                className="w-full rounded-xl border border-slate-300 py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Register Another Member
+              </button>
             </div>
           )}
         </div>

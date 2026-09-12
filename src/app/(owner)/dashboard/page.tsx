@@ -12,6 +12,7 @@ import { formatINR } from '@/lib/utils/currency';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
 import { formatDisplayDate } from '@/lib/utils/date';
 import MarkPaidModal from '@/components/payments/MarkPaidModal';
+import ReviewRegistrationModal from '@/components/registrations/ReviewRegistrationModal';
 import {
   Sparkles,
   Loader2,
@@ -31,8 +32,9 @@ export default function DashboardPage() {
 
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
+  const [selectedRegForReview, setSelectedRegForReview] = useState<RegistrationRequest | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ title: string; subtitle?: string; type?: 'success' | 'alert' } | null>(null);
-  const [convertingRegId, setConvertingRegId] = useState<string | null>(null);
 
   const prevPendingCountRef = useRef<number | null>(null);
 
@@ -145,32 +147,7 @@ export default function DashboardPage() {
     window.dispatchEvent(new Event('gym:member-updated'));
   };
   
-  const handleConvertRegistration = async (id: string) => {
-    if (isDemoMode) {
-      showToast('Demo Mode', 'This action is simulated in the sandbox.');
-      return;
-    }
-    try {
-      setConvertingRegId(id);
-      const res = await fetch('/api/registrations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registration_id: id }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to convert registration');
-      }
 
-      showToast('Registration Approved!', 'Member created and cycle generated.');
-      loadDashboard();
-      window.dispatchEvent(new Event('gym:member-updated'));
-    } catch (err: any) {
-      alert(err.message || 'Error converting registration');
-    } finally {
-      setConvertingRegId(null);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -255,12 +232,14 @@ export default function DashboardPage() {
                   <span className="text-xs text-zinc-500 ml-2">• {reg.plan_name_snapshot}</span>
                 </div>
                 <button
-                  onClick={() => handleConvertRegistration(reg.id)}
-                  disabled={convertingRegId === reg.id}
-                  className="h-7 px-3 inline-flex items-center gap-1.5 rounded bg-amber-600 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  onClick={() => {
+                    setSelectedRegForReview(reg);
+                    setIsReviewModalOpen(true);
+                  }}
+                  className="h-7 px-3 inline-flex items-center gap-1.5 rounded-xl bg-amber-600 text-xs font-semibold text-white hover:bg-amber-700 shadow-sm transition-colors"
                 >
-                  {convertingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserCheck className="h-3 w-3" />}
-                  Approve
+                  <UserCheck className="h-3 w-3" />
+                  Review & Approve
                 </button>
               </div>
             ))}
@@ -395,6 +374,17 @@ export default function DashboardPage() {
         onClose={() => setIsMarkPaidOpen(false)}
         member={selectedMember}
         onPaymentSuccess={handlePaymentSuccess}
+      />
+
+      <ReviewRegistrationModal
+        isOpen={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        registration={selectedRegForReview}
+        onApproved={(result) => {
+          showToast('Registration Approved!', `Enrolled ${result.member?.full_name || 'member'}.`);
+          loadDashboard();
+          window.dispatchEvent(new Event('gym:member-updated'));
+        }}
       />
     </div>
   );

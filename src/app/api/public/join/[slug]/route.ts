@@ -11,7 +11,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Gym not found' }, { status: 404 });
     }
 
-    // Explicitly safe payload - Zero private data exposed
+    // Explicitly safe payload - Zero private credentials or API keys exposed
     return NextResponse.json({
       success: true,
       gym: {
@@ -28,6 +28,8 @@ export async function GET(
         duration_days: p.duration_days,
         price: p.price,
         description: p.description,
+        image_url: p.image_url,
+        features: p.features || [],
       })),
     });
   } catch (error: any) {
@@ -41,7 +43,7 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
-    const { full_name, phone, email, plan_id } = body;
+    const { full_name, phone, email, plan_id, whatsapp_opt_in } = body;
 
     if (!full_name || !phone || !plan_id) {
       return NextResponse.json(
@@ -56,6 +58,7 @@ export async function POST(
       phone,
       email,
       plan_id,
+      whatsapp_opt_in: Boolean(whatsapp_opt_in),
     });
 
     return NextResponse.json(result, { status: 201 });

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { MemberWithDetails } from '@/lib/types/database';
+import { MemberWithDetails, MembershipLifecycle } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
 import { formatDisplayDate } from '@/lib/utils/date';
 import { buildWhatsAppReminderUrl } from '@/lib/utils/whatsapp';
@@ -18,14 +18,23 @@ import {
   Loader2,
   User,
   UserPlus,
-  Trash2,
+  Pause,
+  Play,
+  Ban,
+  MoreVertical,
+  Calendar,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  HelpCircle,
+  RefreshCw,
   X,
 } from 'lucide-react';
 
 export default function MembersPage() {
   const [members, setMembers] = useState<MemberWithDetails[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'due' | 'overdue' | 'paid'>('all');
+  const [filter, setFilter] = useState<'all' | 'due' | 'overdue' | 'paid' | 'paused' | 'cancelled'>('all');
   const [isLoading, setIsLoading] = useState(true);
 
   // Mark Paid modal
@@ -33,9 +42,11 @@ export default function MembersPage() {
   const [isMarkPaidOpen, setIsMarkPaidOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Delete Member state
-  const [memberToDelete, setMemberToDelete] = useState<MemberWithDetails | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  // Active action menu row ID
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [cancelModalMember, setCancelModalMember] = useState<MemberWithDetails | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   const loadMembers = async () => {
     try {
@@ -90,35 +101,80 @@ export default function MembersPage() {
     loadMembers();
   };
 
-  const confirmDeleteMember = async () => {
-    if (!memberToDelete) return;
+  const handleLifecycleAction = async (
+    memberId: string,
+    action: 'pause' | 'cancel' | 'reactivate',
+    reason?: string
+  ) => {
     try {
-      setIsDeleting(true);
-      const res = await fetch(`/api/members/${memberToDelete.id}`, {
-        method: 'DELETE',
+      setIsActionLoading(true);
+      const res = await fetch(`/api/members/${memberId}/lifecycle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reason }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to delete member');
+        throw new Error(data.error || `Failed to ${action} membership`);
       }
 
-      setToastMessage(`Member ${memberToDelete.full_name} deleted from database successfully.`);
+      setToastMessage(data.message || `Membership ${action}d successfully`);
       setTimeout(() => setToastMessage(null), 4000);
-      setMemberToDelete(null);
+      setCancelModalMember(null);
+      setCancellationReason('');
+      setActiveMenuId(null);
       loadMembers();
       window.dispatchEvent(new Event('gym:member-updated'));
     } catch (err: any) {
-      alert(err.message || 'Error deleting member');
+      alert(err.message || 'Error updating membership lifecycle');
     } finally {
-      setIsDeleting(false);
+      setIsActionLoading(false);
     }
   };
 
-  const getStatusBadge = (m: MemberWithDetails) => {
+  const getLifecycleBadge = (lifecycle?: MembershipLifecycle) => {
+    switch (lifecycle) {
+      case 'active':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Active
+          </span>
+        );
+      case 'paused':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+            <Pause className="h-3 w-3" />
+            Paused
+          </span>
+        );
+      case 'cancelled':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-800">
+            <Ban className="h-3 w-3" />
+            Cancelled
+          </span>
+        );
+      case 'expired':
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+            Expired
+          </span>
+        );
+      default:
+        return (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+            Active
+          </span>
+        );
+    }
+  };
+
+  const getPaymentStatusBadge = (m: MemberWithDetails) => {
     const mship = m.membership;
     if (!mship) {
       return (
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
           No Plan
         </span>
       );
@@ -126,7 +182,7 @@ export default function MembersPage() {
 
     if (mship.outstanding_balance === 0) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
           <span>Paid</span>
         </span>
@@ -135,7 +191,7 @@ export default function MembersPage() {
 
     if (mship.is_overdue) {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800">
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-bold text-rose-800">
           <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
           <span>{mship.days_overdue}d Overdue</span>
         </span>
@@ -144,7 +200,7 @@ export default function MembersPage() {
 
     if (mship.status === 'partial') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
           <Clock className="h-3.5 w-3.5 text-amber-600" />
           <span>Partial Due</span>
         </span>
@@ -152,15 +208,40 @@ export default function MembersPage() {
     }
 
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
         <Clock className="h-3.5 w-3.5 text-amber-600" />
         <span>Due</span>
       </span>
     );
   };
 
+  const getPaymentMethodIcon = (method: string | null) => {
+    switch (method) {
+      case 'upi':
+        return (
+          <span title="Last payment via UPI">
+            <Smartphone className="h-3 w-3 text-emerald-600" />
+          </span>
+        );
+      case 'cash':
+        return (
+          <span title="Last payment via Cash">
+            <Banknote className="h-3 w-3 text-amber-600" />
+          </span>
+        );
+      case 'online':
+        return (
+          <span title="Last payment via Online Gateway">
+            <CreditCard className="h-3 w-3 text-blue-600" />
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 space-y-6 pb-12">
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-2xl border border-zinc-700 animate-in fade-in slide-in-from-top-4 max-w-md">
           <CheckCircle className="h-5 w-5 text-emerald-400 shrink-0" />
@@ -175,7 +256,7 @@ export default function MembersPage() {
             Gym Members
           </h1>
           <p className="text-sm font-medium text-slate-500">
-            Search members, inspect subscription cycles, and manage dues.
+            Active memberships, payment tracking, and WhatsApp communication hub.
           </p>
         </div>
 
@@ -189,7 +270,7 @@ export default function MembersPage() {
       </div>
 
       {/* Search and Filters Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col md:flex-row gap-3">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -203,12 +284,12 @@ export default function MembersPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0">
-          {(['all', 'due', 'overdue', 'paid'] as const).map((tab) => (
+        <div className="flex items-center rounded-xl bg-slate-200/80 p-1 text-xs font-bold text-slate-600 shrink-0 overflow-x-auto">
+          {(['all', 'due', 'overdue', 'paid', 'paused', 'cancelled'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`rounded-lg px-3.5 py-1.5 capitalize transition ${
+              className={`rounded-lg px-3 py-1.5 capitalize transition whitespace-nowrap ${
                 filter === tab
                   ? 'bg-white text-slate-900 shadow-sm font-black'
                   : 'hover:text-slate-900'
@@ -247,87 +328,157 @@ export default function MembersPage() {
           <div className="divide-y divide-slate-100">
             {members.map((m) => {
               const mship = m.membership;
+              const lifecycle = mship?.lifecycle || 'active';
               const hasOutstanding = (mship?.outstanding_balance || 0) > 0;
-              const waUrl = hasOutstanding
-                ? buildWhatsAppReminderUrl({
-                    phone: m.phone,
-                    name: m.full_name,
-                    amount: mship?.outstanding_balance || 0,
-                    statusType: mship?.is_overdue ? 'overdue' : 'due',
-                  })
-                : undefined;
+              const waUrl = buildWhatsAppReminderUrl({
+                phone: m.phone,
+                name: m.full_name,
+                amount: mship?.outstanding_balance || 0,
+                statusType: mship?.is_overdue ? 'overdue' : 'due',
+              });
 
               return (
                 <div
                   key={m.id}
-                  className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 transition"
+                  className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 transition"
                 >
+                  {/* Member Info */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/members/${m.id}`}
                         className="text-base font-bold text-slate-900 hover:text-emerald-600 transition truncate"
                       >
                         {m.full_name}
                       </Link>
-                      {getStatusBadge(m)}
+                      {getLifecycleBadge(lifecycle)}
+                      {getPaymentStatusBadge(m)}
+                      {m.whatsapp_opt_in && (
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                          WA Opted-in
+                        </span>
+                      )}
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
                       <span>{m.phone}</span>
                       {m.email && <span>• {m.email}</span>}
                       <span>• Plan: <strong className="text-slate-700">{mship?.plan_name_snapshot || 'None'}</strong></span>
+                      <span>• Member Since: {formatDisplayDate(m.joined_at)}</span>
                       {mship?.due_date && (
-                        <span>• Due: <strong>{formatDisplayDate(mship.due_date)}</strong></span>
+                        <span>
+                          • Due: <strong className={mship.is_overdue ? 'text-rose-600' : 'text-slate-700'}>{formatDisplayDate(mship.due_date)}</strong>
+                        </span>
+                      )}
+                      {m.last_payment_method && (
+                        <span className="inline-flex items-center gap-1">
+                          • Last: {getPaymentMethodIcon(m.last_payment_method)}
+                          <span className="uppercase text-[11px]">{m.last_payment_method}</span>
+                        </span>
                       )}
                     </div>
                   </div>
 
                   {/* Financial amounts & Actions */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
-                    <div className="text-left sm:text-right">
-                      <div className="text-xs text-slate-400 font-semibold uppercase">Outstanding</div>
+                  <div className="flex items-center justify-between md:justify-end gap-3 sm:gap-4 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+                    <div className="text-left md:text-right">
+                      <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Outstanding</div>
                       <div className={`text-base font-black ${hasOutstanding ? (mship?.is_overdue ? 'text-rose-600' : 'text-amber-600') : 'text-emerald-600'}`}>
                         {formatINR(mship?.outstanding_balance || 0)}
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {hasOutstanding && waUrl && (
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
-                          title="WhatsApp reminder"
-                        >
-                          <MessageCircle className="h-4 w-4 text-emerald-600" />
-                          <span className="hidden md:inline">WhatsApp</span>
-                        </a>
-                      )}
-
-                      {hasOutstanding ? (
-                        <button
-                          onClick={() => handleOpenMarkPaid(m)}
-                          className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                          <span>Mark Paid</span>
-                        </button>
-                      ) : (
-                        <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-400">
-                          Paid
-                        </span>
-                      )}
-
-                      {/* Delete Member Button */}
-                      <button
-                        onClick={() => setMemberToDelete(m)}
-                        className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
-                        title="Delete member from database"
+                      {/* WhatsApp Button */}
+                      <a
+                        href={waUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition"
+                        title="Open WhatsApp chat or reminder"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <MessageCircle className="h-4 w-4 text-emerald-600" />
+                        <span className="hidden sm:inline">WhatsApp</span>
+                      </a>
+
+                      {/* Mark Paid Button (Primary, always enabled for owner) */}
+                      <button
+                        onClick={() => handleOpenMarkPaid(m)}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition"
+                        title="Record payment"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Mark Paid</span>
                       </button>
+
+                      {/* More Menu Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveMenuId(activeMenuId === m.id ? null : m.id)}
+                          className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 border border-transparent hover:border-slate-200 transition"
+                          title="More options"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+
+                        {activeMenuId === m.id && (
+                          <div className="absolute right-0 mt-1 w-48 rounded-2xl bg-white p-1.5 shadow-2xl border border-slate-100 z-40 animate-in fade-in slide-in-from-top-2 text-xs">
+                            <Link
+                              href={`/members/${m.id}`}
+                              className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-slate-700 hover:bg-slate-50 transition"
+                            >
+                              <User className="h-3.5 w-3.5 text-slate-400" />
+                              <span>View Profile</span>
+                            </Link>
+
+                            {lifecycle === 'active' && (
+                              <button
+                                onClick={() => handleLifecycleAction(m.id, 'pause')}
+                                disabled={isActionLoading}
+                                className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-amber-700 hover:bg-amber-50 transition"
+                              >
+                                <Pause className="h-3.5 w-3.5 text-amber-600" />
+                                <span>Pause Membership</span>
+                              </button>
+                            )}
+
+                            {lifecycle === 'paused' && (
+                              <button
+                                onClick={() => handleLifecycleAction(m.id, 'reactivate')}
+                                disabled={isActionLoading}
+                                className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-emerald-700 hover:bg-emerald-50 transition"
+                              >
+                                <Play className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Resume Membership</span>
+                              </button>
+                            )}
+
+                            {lifecycle !== 'cancelled' && (
+                              <button
+                                onClick={() => {
+                                  setActiveMenuId(null);
+                                  setCancelModalMember(m);
+                                }}
+                                className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-rose-600 hover:bg-rose-50 transition"
+                              >
+                                <Ban className="h-3.5 w-3.5 text-rose-500" />
+                                <span>Cancel Membership</span>
+                              </button>
+                            )}
+
+                            {lifecycle === 'cancelled' && (
+                              <button
+                                onClick={() => handleLifecycleAction(m.id, 'reactivate')}
+                                disabled={isActionLoading}
+                                className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-emerald-700 hover:bg-emerald-50 transition"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5 text-emerald-600" />
+                                <span>Reactivate</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
                       <Link
                         href={`/members/${m.id}`}
@@ -345,53 +496,69 @@ export default function MembersPage() {
         )}
       </div>
 
-      {/* Delete Member Confirmation Modal */}
-      {memberToDelete && (
+      {/* Cancel Modal */}
+      {cancelModalMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 text-left">
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 border border-slate-200 text-left">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-bold text-slate-900">Delete Member</h3>
+              <div className="flex items-center gap-2">
+                <Ban className="h-5 w-5 text-rose-600" />
+                <h3 className="text-lg font-bold text-slate-900">Cancel Membership</h3>
+              </div>
               <button
-                onClick={() => setMemberToDelete(null)}
+                onClick={() => setCancelModalMember(null)}
                 className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 transition"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-4 text-sm text-slate-600">
+            <div className="mt-4 text-sm text-slate-600 space-y-3">
               <p>
-                Are you sure you want to delete <strong className="text-slate-900">{memberToDelete.full_name}</strong>?
+                Cancel active membership for <strong className="text-slate-900">{cancelModalMember.full_name}</strong>.
               </p>
-              <p className="mt-2 text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200 font-medium">
-                ⚠️ This will permanently remove this member along with their membership cycles and payment history from the database.
+              <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                ℹ️ Membership will be marked as <strong>Cancelled</strong>. Payment and attendance history are preserved.
               </p>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Cancellation Reason (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  placeholder="e.g. Relocating, Medical reason"
+                  className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 focus:border-rose-500 focus:outline-none focus:ring-4 focus:ring-rose-500/10 transition"
+                />
+              </div>
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setMemberToDelete(null)}
-                disabled={isDeleting}
+                onClick={() => setCancelModalMember(null)}
+                disabled={isActionLoading}
                 className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={confirmDeleteMember}
-                disabled={isDeleting}
+                onClick={() => handleLifecycleAction(cancelModalMember.id, 'cancel', cancellationReason)}
+                disabled={isActionLoading}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-rose-700 active:scale-95 disabled:opacity-50 transition"
               >
-                {isDeleting ? (
+                {isActionLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Deleting...</span>
+                    <span>Cancelling...</span>
                   </>
                 ) : (
                   <>
-                    <Trash2 className="h-4 w-4" />
-                    <span>Yes, Delete</span>
+                    <Ban className="h-4 w-4" />
+                    <span>Confirm Cancellation</span>
                   </>
                 )}
               </button>

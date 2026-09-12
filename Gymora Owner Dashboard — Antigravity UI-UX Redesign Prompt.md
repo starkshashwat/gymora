@@ -1,1076 +1,1127 @@
-# GYMORA — OWNER DASHBOARD UI/UX REDESIGN & IMPLEMENTATION
+GYMORA — PRODUCT ARCHITECTURE + UX + MEMBER + QR + SETTINGS + AUTOMATION REWORK
 
-You are working directly inside the existing GitHub repository:
+IMPORTANT:
+You are working on the existing Gymora repository.
 
-`https://github.com/starkshashwat/gymora`
+Repository:
+https://github.com/starkshashwat/gymora
 
-Do NOT create a separate demo, mockup, static prototype, or parallel dashboard.
+Do NOT create a parallel/mock implementation.
 
-Your job is to inspect the existing codebase first, understand the current architecture and existing components/data flow, and then redesign and implement the OWNER dashboard directly inside the existing application.
+First inspect the complete repository and understand the existing:
+- Next.js 14 App Router structure
+- Supabase setup
+- PostgreSQL schema
+- migrations
+- RLS policies
+- RPC functions
+- authentication
+- owner dashboard
+- members
+- member detail
+- payments
+- plans
+- registrations
+- public QR onboarding
+- existing WhatsApp click-to-chat implementation
+- current onboarding wizard
+- current gateway configuration
+- existing tests
+- existing UI components
+- current local working UI
 
----
+Read:
+01_PRD.md
+02_SYSTEM_ARCHITECTURE.md
+03_DATABASE_SCHEMA.sql
+04_RLS_SECURITY.md
+05_USER_FLOWS.md
+06_API_AND_BACKEND_CONTRACT.md
+07_UI_SCREEN_SPEC.md
+08_IMPLEMENTATION_PLAN.md
+09_TEST_CASES.md
+10_ENV_AND_DEPLOYMENT.md
+11_AGENT_INSTRUCTIONS.md
 
-## 1. FIRST: SCAN THE EXISTING REPOSITORY
+Also inspect all current source files before modifying anything.
 
-Before changing any code:
+The screenshots supplied with this task represent the desired UX direction. Do not blindly copy the screenshots. Reconcile them with the actual current codebase.
 
-1. Inspect the complete project structure.
-2. Identify:
-   - Next.js app/router structure
-   - Owner dashboard route
-   - Existing layout/sidebar/header components
-   - Existing dashboard components
-   - Members components
-   - Payments components
-   - Plans components
-   - Registration components
-   - Supabase client/server utilities
-   - Existing hooks
-   - Existing API/server actions
-   - Existing types
-   - Existing design system/components
-   - Tailwind configuration
-   - Global CSS
-   - Existing Framer Motion usage
-3. Read the existing product documentation:
-   - `01_PRD.md`
-   - `02_SYSTEM_ARCHITECTURE.md`
-   - `03_DATABASE_SCHEMA.sql`
-   - `04_RLS_SECURITY.md`
-   - `05_USER_FLOWS.md`
-   - `06_API_AND_BACKEND_CONTRACT.md`
-   - `07_UI_SCREEN_SPEC.md`
-   - `08_IMPLEMENTATION_PLAN.md`
-   - `09_TEST_CASES.md`
-   - `11_AGENT_INSTRUCTIONS.md`
-4. Understand the actual data available from Supabase before designing any new metric.
-5. Reuse existing components wherever they are good enough.
-6. Do not duplicate functionality.
-7. Do not change database architecture unless absolutely necessary.
-8. Do not break existing routes, authentication, Supabase queries, payment logic, member logic, or RLS.
+==================================================
+CORE PRODUCT PRINCIPLE
+==================================================
 
-The existing MVP is intentionally focused on:
+Gymora is a simple gym-owner operations system.
 
-- Members
-- Payments
-- Due/overdue tracking
-- Payment recording
-- Plans
-- Registrations
-- Gym QR onboarding
-- Manual WhatsApp reminders
+The primary user is a non-technical gym owner/receptionist.
 
-Do NOT turn the dashboard into a generic analytics SaaS dashboard.
+Every screen must answer:
 
----
+"What do I need to know?"
+"What do I need to do?"
+"What is the next action?"
 
-# 2. CORE PRODUCT PRINCIPLE
+Do not build an analytics-heavy SaaS.
 
-Gymora is an operational tool for gym owners.
+Do not add AI-looking UI.
 
-The dashboard must answer these questions immediately:
+Do not add decorative gradients, excessive glassmorphism, giant cards, excessive shadows, unnecessary charts, fake AI insights, or meaningless metrics.
 
-1. How much money did I collect today?
-2. How much money is currently due?
-3. Who needs my attention right now?
-4. Who is overdue?
-5. What payments happened recently?
-6. What should I do next?
-
-The dashboard is NOT primarily an analytics screen.
-
-It is a:
-
-> DAILY GYM OPERATIONS CONTROL CENTER
-
-Design around actions and urgency, not around showing every available database metric.
-
----
-
-# 3. REMOVE THE CURRENT "AI-SLOP" VISUAL STYLE
-
-If the existing dashboard contains any generic AI-generated SaaS styling, remove it.
-
-Avoid:
-
-- excessive gradients
-- purple/blue gradient backgrounds
-- glassmorphism
-- floating decorative blobs
-- giant rounded cards
-- excessive border radius
-- excessive drop shadows
-- unnecessary illustrations
-- 3D icons
-- decorative sparkles
-- random AI-generated visual elements
-- huge empty hero areas
-- oversized welcome messages
-- fake AI insights
-- meaningless percentages
-- excessive donut/pie charts
-- cards inside cards
-- unnecessary badges
-- excessive animation
-- every section looking like a separate floating container
-
-The UI should feel like a real production business application.
-
-Reference design quality:
-
-- Linear
-- Stripe Dashboard
-- modern fintech/POS software
-- clean admin systems
-
-Do not copy these products visually. Use them only as quality references.
-
-The result should feel:
-
+Keep the UI:
+- clean
 - professional
-- calm
-- trustworthy
 - fast
-- practical
-- premium
-- easy to scan
+- obvious
+- mobile-first
 - operational
+- easy for non-technical users
 
----
+==================================================
+1. REDESIGN ONBOARDING
+==================================================
 
-# 4. VISUAL DESIGN DIRECTION
+CURRENT PROBLEM:
 
-Use a restrained visual system.
+The current onboarding wizard asks the owner to configure:
+- payment mode
+- payment gateway
+- API credentials
+- WhatsApp mode
+- Facebook/WABA information
+- plans
+- member import
 
-### Background
+This is too technical.
 
-Very light neutral/off-white.
+REMOVE PAYMENT GATEWAY CONFIGURATION FROM ONBOARDING.
 
-Avoid strong tinted backgrounds.
+REMOVE WHATSAPP API CONFIGURATION FROM ONBOARDING.
 
-### Cards
+REMOVE API keys/secrets from onboarding.
 
-White or very subtle surface contrast.
+REMOVE gateway verification from onboarding.
 
-Use thin borders instead of heavy shadows.
+REMOVE Facebook/WhatsApp connection simulation from onboarding.
 
-### Border radius
+NEW ONBOARDING:
 
-Moderate radius.
+Step 1:
+Gym Details
+- Gym name
+- Owner/contact phone
+- Email if appropriate
+- Address
+- Gym slug/subdomain
+- Logo optional
 
-Do not make every element excessively rounded.
+Step 2:
+Membership Plans
+- Create initial plans
+- Name
+- Price
+- Duration
+- Description
+- Image/banner
 
-### Typography
+Allow:
+- Add plan
+- Edit plan
+- Remove plan
 
-Use the existing project font if appropriate.
+Step 3:
+Existing Members
+- Optional Excel import
+- Skip option
 
-Otherwise use a clean modern sans-serif such as Geist/Inter.
+Step 4:
+Finish
 
-Typography hierarchy:
+Then immediately enter:
 
-- Page title: 24–28px
-- Section title: 15–17px
-- Body: 14px
-- Supporting text: 12–13px
-- Important monetary values: 22–28px
-- Table data: 13–14px
+/dashboard
 
-Do not use oversized typography simply to make the UI look impressive.
+The owner should NOT need to understand:
+- API keys
+- webhooks
+- WABA IDs
+- phone number IDs
+- gateway secrets
 
----
+during onboarding.
 
-# 5. OWNER DASHBOARD INFORMATION HIERARCHY
+==================================================
+2. ADD SETTINGS
+==================================================
 
-The dashboard should follow this hierarchy:
+Add a proper Settings entry to the owner navigation.
 
-## LEVEL 1 — ACTION / URGENCY
+Settings should be a central configuration area.
 
-What requires attention right now?
+Sections:
 
-## LEVEL 2 — MONEY / BUSINESS STATUS
+A. General
+- Gym name
+- Logo
+- Phone
+- Email
+- Address
+- Public slug/subdomain
+- Public QR URL
 
-How much was collected?
-How much is due?
-How much is overdue?
+B. Payments
 
-## LEVEL 3 — OPERATIONAL CONTEXT
+Section 1:
+Manual Payments
 
-Recent payments.
-Collection trend.
-Registrations.
+Supported methods:
+- Cash
+- UPI
+- Local QR
+- Other
 
-## LEVEL 4 — DEEP DATA
+Allow the owner to configure:
+- UPI ID
+- Local QR image
+- payment instructions
 
-Full member/payment details should remain on their dedicated pages.
+Section 2:
+Online Payment Gateway
 
-Do not bring deep tables and analytics into the dashboard unnecessarily.
+Providers:
+- Razorpay
+- PhonePe
+- Cashfree
+- Paytm
 
----
+Show each provider as:
+- Not connected
+- Connected
+- Connection error
 
-# 6. DESKTOP DASHBOARD STRUCTURE
+Do NOT require gateway configuration during onboarding.
 
-Implement approximately this structure:
+The settings page should allow future connection/setup.
 
-```text
----------------------------------------------------------
-SIDEBAR                MAIN CONTENT
----------------------------------------------------------
+IMPORTANT SECURITY:
+Do not expose payment secrets to the client.
+Do not store secrets in publicly readable tables.
+Do not expose gateway secrets through normal SELECT queries.
+Use server-only secure storage/encryption appropriate to the current Supabase architecture.
 
-GYMORA                 Good morning
-                       Saturday, 12 September
+Use webhooks for provider payment state updates.
 
-Dashboard              [ + Add Member ] [ Record Payment ]
-Members
-Payments
-Plans
+Payment gateway integration must update the existing immutable payment records.
 
-Registrations           TODAY
-Gym QR                  ₹18,500 collected
-                        7 payments
-                        ↑ vs previous period
+Do not duplicate payment logic.
 
-                        DUE TODAY    OVERDUE    ACTIVE
-                        ₹12.4K       ₹38.7K     184
+==================================================
+3. WHATSAPP SETTINGS
+==================================================
 
-                        NEEDS ATTENTION
-                        --------------------------------
-                        Rahul   ₹1,500   4 days overdue
-                                             [Paid]
+Add:
 
-                        Priya   ₹4,500   2 days overdue
-                                             [Paid]
+Settings → WhatsApp
 
-                        Amit    ₹1,500   Due today
-                                      [WhatsApp] [Paid]
+Two clearly separated modes:
 
-                        --------------------------------
+A. Manual WhatsApp
 
-                        Collection Trend
-                        ----------------
-                        simple 7-day chart
+Description:
+"Send messages manually using WhatsApp."
 
-                        Recent Payments
-                        ----------------
-                        Rahul      ₹1,500   UPI
-                        Neha       ₹2,000   Cash
-                        Amit       ₹4,500   UPI
-```
+Keep the existing WhatsApp click-to-chat/deep-link functionality.
 
-This is a directional structure, not a pixel-perfect requirement.
+B. WhatsApp Business
 
-Use your judgment based on the existing application.
+Description:
+"Automate payment reminders, payment confirmations and membership updates."
 
----
+Status:
+- Not connected
+- Connected
+- Error
 
-# 7. HEADER
+Primary CTA:
+Connect WhatsApp Business
 
-Keep the header minimal.
+DO NOT implement WhatsApp Web/device-link browser automation.
 
-Left:
+Prepare the architecture for official WhatsApp Business Platform / Cloud API integration.
 
-- Page title
-- optional date/context
+Do not pretend a fake Meta connection exists.
 
-Right:
+If integration is not actually configured, show:
+"Not connected"
 
-- notification
-- owner profile/menu
+not fake success.
 
-Do NOT create a huge hero header.
+==================================================
+4. WHATSAPP TEMPLATE ARCHITECTURE
+==================================================
 
-Avoid:
+Create a future-ready template system.
 
-"Welcome back 👋"
+Important:
+WhatsApp Business Platform business-initiated messages require approved templates.
 
-Instead use something concise such as:
+Therefore Gymora should NOT pretend that local text templates are automatically equivalent to Meta-approved templates.
 
-"Good morning"
-
-or simply:
-
-"Overview"
-
-The interface should feel like a tool, not a marketing landing page.
-
----
-
-# 8. PRIMARY ACTIONS
-
-The two most important owner actions should be immediately accessible:
-
-### Primary
-
-`+ Add Member`
-
-### Secondary
-
-`Record Payment`
-
-If the current codebase already has an appropriate payment action flow, reuse it.
-
-Do not create duplicate payment logic.
-
----
-
-# 9. TODAY'S COLLECTION
-
-Make today's collection the primary financial signal.
+Create a template mapping layer.
 
 Example:
 
-```text
-TODAY
+Payment Due Reminder
+Meta template:
+gym_payment_due
 
-₹18,500
+Variables:
+- member_name
+- gym_name
+- amount
+- due_date
+- payment_link if available
 
-7 payments
+Template status:
+- Not configured
+- Pending
+- Approved
+- Rejected
+- Paused
 
-↑ 12% vs yesterday
-```
+Allow:
+- View template
+- Map template to automation
+- Open/manage template externally where appropriate
 
-Only show comparison if the existing data layer can calculate it reliably.
+Do not build a fake WhatsApp approval system.
 
-Do NOT fabricate comparison values.
+==================================================
+5. REMINDER / AUTOMATION ENGINE
+==================================================
 
-If comparison data is unavailable, simply show:
+Create a generic reminder workflow architecture.
 
-```text
-₹18,500
-7 payments today
-```
+IMPORTANT:
+Do not hard-code the system directly into WhatsApp.
 
-The number should be visually strong but not enormous.
+Architecture:
 
----
+EVENT
+→ AUTOMATION RULE
+→ CONDITIONS
+→ TEMPLATE
+→ CHANNEL
+→ DELIVERY
 
-# 10. KPI SECTION
+Example:
 
-Keep KPI count low.
+Membership due
+→ 3 days before
+→ member has WhatsApp opt-in
+→ payment_due template
+→ WhatsApp
+
+Create Settings → Reminders & Automations.
+
+Initial triggers:
+
+1. Registration submitted
+2. Registration approved
+3. Payment received
+4. Partial payment received
+5. Payment due soon
+6. Payment due today
+7. Payment overdue
+8. Membership expiring soon
+9. Membership expired
+10. Membership cancelled
+
+Each rule should support:
+
+- enabled/disabled
+- event
+- timing offset
+- template
+- channel
+- conditions
+- stop conditions
+- maximum sends
+- retry policy
+
+Examples:
+
+Payment Due:
+3 days before
+
+Payment Due:
+1 day before
+
+Payment Due:
+on due date
+
+Payment Overdue:
+3 days after due date
+
+Payment Overdue:
+7 days after due date
+
+Do not automatically enable aggressive reminders.
+
+Owner should control automation.
+
+==================================================
+6. WHATSAPP OPT-IN
+==================================================
+
+Because WhatsApp messaging requires recipient opt-in:
+
+Add appropriate member-level fields for:
+- whatsapp_opt_in
+- whatsapp_opted_in_at
+- whatsapp_opt_out
+- whatsapp_opted_out_at
+
+The public registration flow should include a clear WhatsApp consent option.
+
+Example:
+
+[ ] I agree to receive membership and payment updates from
+{Gym Name} on WhatsApp.
+
+Do not pre-check it.
+
+Respect opt-out.
+
+Automation must never send WhatsApp messages when opt-out is active.
+
+Keep manual click-to-chat available separately.
+
+==================================================
+7. MEMBER LIST REDESIGN
+==================================================
+
+The Members page must be understandable to a non-technical gym owner.
+
+Do not show unnecessary database information.
+
+Each member row/card should clearly show:
+
+Name
+Phone
+Email if available
+
+Current Plan
+Member Since
+
+Last Payment
+Next Payment / Due Date
+
+Outstanding Amount
+
+Current status:
+- Paid
+- Due
+- Overdue
+- Partial
+- Cancelled
+- Expired
+
+Actions:
+
+WhatsApp
+Mark Paid
+More
+
+Do not hide Mark Paid inside a three-dot menu.
+
+Mark Paid must remain a primary action.
+
+Use simple hierarchy.
+
+Desktop:
+compact horizontal member row.
+
+Mobile:
+stacked card.
+
+Do not turn every field into a separate giant card.
+
+==================================================
+8. MEMBER DETAIL PAGE
+==================================================
+
+The member detail page should become a member operations page.
+
+Top:
+
+Name
+Status
+Phone
+Email
+Member since
+
+Primary actions:
+- WhatsApp
+- Mark Paid
+- More
+
+Remove the prominent Delete button.
+
+Do NOT encourage deleting members.
+
+The More menu should contain:
+
+- Edit Member
+- Change Plan
+- Pause Membership
+- Cancel Membership
+- Reactivate Membership
+
+If data retention requires deletion in backend for admin/debug purposes, keep it out of the normal member workflow.
+
+Financial records must remain preserved.
+
+==================================================
+9. MEMBERSHIP CANCELLATION
+==================================================
+
+Do NOT treat cancellation as deletion.
+
+Add a membership lifecycle state separate from payment state.
+
+Payment status and membership lifecycle are different concepts.
+
+Example lifecycle:
+
+active
+paused
+cancelled
+expired
+
+Payment state:
+
+pending
+partial
+paid
+overdue
+refunded
+void
+
+Do not overload one enum for both concepts.
+
+When cancelling:
+
+- mark current membership as cancelled
+- mark member inactive where appropriate
+- preserve payment history
+- preserve membership history
+- create audit log
+- do not delete financial records
+
+Reactivation should create or activate the correct membership cycle according to business rules.
+
+Prefer creating a new membership cycle rather than mutating historical financial data.
+
+==================================================
+10. AUTO-CANCELLATION AFTER OVERDUE
+==================================================
+
+Add:
+
+Settings → Membership Rules
+
+Configuration:
+
+Automatically cancel unpaid memberships after:
+
+- Never
+- 3 days
+- 7 days
+- 14 days
+- 30 days
+- Custom
+
+Do not hard-code this behavior.
+
+The system should:
+
+Due
+→ Overdue
+→ Grace period
+→ Cancelled
+
+Before cancellation:
+- create audit event
+- optionally enqueue reminder automation
+- do not delete the member
+
+After cancellation:
+- member remains searchable
+- history remains visible
+- new membership can be created later
+
+==================================================
+11. MEMBER INFORMATION MODEL
+==================================================
+
+The member detail/list experience should expose:
+
+Identity:
+- full_name
+- phone
+- email
+
+Membership:
+- current plan
+- plan price
+- start date
+- member since
+- end date
+- next payment date
+
+Financial:
+- total cycle amount
+- paid so far
+- outstanding
+- last payment date
+- last payment method
+
+History:
+- payment history
+- previous membership cycles
+
+Use existing fields where possible.
+
+Add only the fields actually needed.
+
+==================================================
+12. PUBLIC QR / PLAN EXPERIENCE
+==================================================
+
+Keep the existing public:
+
+/join/[slug]
+
+architecture.
+
+Public users should only receive public gym data and active plan data.
+
+Never expose:
+- members
+- payments
+- owner data
+- private notes
+- API credentials
+- private settings
+
+Improve public plan cards.
+
+Each plan should support:
+
+- image/banner
+- name
+- price
+- duration
+- description
+- included facilities/features
+
+Add:
+
+image_url
+
+to membership plans.
+
+Use Supabase Storage for plan images.
+
+Recommended display ratio:
+16:9
+
+Optimize uploaded images.
+
+Public QR should show the plan image prominently.
+
+==================================================
+13. QR REGISTRATION APPROVAL
+==================================================
+
+Current flow is:
+
+QR submission
+→ Approve & Convert to Member
+
+Change this.
+
+Create:
+
+Review Registration
+
+Show all submitted information:
+
+- Name
+- Phone
+- Email
+- Selected plan
+- Plan price
+- Registration date
+
+Then:
+
+Payment Received?
+
+YES / NO
+
+If YES:
+
+Amount Received
+Payment Method:
+- Cash
+- UPI
+- Local QR
+- Other
+- Gateway
+
+Allow partial payment.
+
+Show:
+
+Plan Amount
+Amount Received
+Remaining Balance
+
+Then:
+
+Approve & Create Member
+
+This action must be transactional.
+
+It should create:
+
+registration conversion
+→ member
+→ membership
+→ payment if applicable
+
+without creating duplicates.
+
+If payment is not received:
+create the member with pending balance.
+
+Do not force the owner to re-enter:
+- name
+- phone
+- email
+- plan
+- plan price
+
+All of these should come from the QR registration request.
+
+==================================================
+14. LOCAL QR PAYMENT FLOW
+==================================================
+
+If the gym uses its own merchant QR:
+
+Do not require:
+- gateway API
+- API keys
+- webhook
+- provider credentials
+
+The owner simply configures:
+
+UPI ID
+Local QR image
+Payment instructions
+
+in Settings.
+
+Public QR flow may show the gym's local QR/payment instructions.
+
+However:
+Do not automatically mark a payment as verified merely because a user says "I paid".
+
+For manual/local QR payments:
+owner verification remains the source of truth.
+
+==================================================
+15. ONLINE PAYMENT FLOW
+==================================================
+
+Prepare architecture for:
+
+Public QR
+→ Select plan
+→ Online payment
+→ Payment provider
+→ Provider webhook
+→ Gymora server
+→ Verify payment
+→ Create/update payment
+→ Update membership balance/status
+
+Provider payment IDs must be stored.
+
+Webhook processing must be:
+- authenticated
+- idempotent
+- duplicate-resistant
+- server-side
+
+Never trust a client-side success screen as the financial source of truth.
+
+==================================================
+16. SUPABASE AS SOURCE OF TRUTH
+==================================================
+
+IMPORTANT CURRENT CODEBASE ISSUE:
+
+Some current service/dbSync flows update the in-memory service first and then attempt to synchronize with Supabase.
+
+For production flows, Supabase PostgreSQL must be the source of truth.
+
+Refactor carefully so:
+
+UI
+→ server route/action
+→ Supabase transaction/RPC
+→ response
+
+Mock/in-memory data should only be used for:
+- demo mode
+- tests
+
+Do not allow production financial state to silently succeed only in memory.
+
+==================================================
+17. TRANSACTIONS / IDEMPOTENCY
+==================================================
+
+The following operations must be atomic:
+
+- Mark Paid
+- Partial Payment
+- Registration Approval
+- Member Creation
+- Membership Cancellation
+- Gateway Payment Webhook
+
+Double click must never create duplicate payments.
+
+Duplicate webhook delivery must never create duplicate payment records.
+
+Use database constraints / idempotency keys where appropriate.
+
+Preserve immutable financial history.
+
+==================================================
+18. SECURITY
+==================================================
+
+Review the existing migration and security model.
+
+Do not expose:
+- gateway secrets
+- WhatsApp access tokens
+- private provider credentials
+
+through client-side queries.
+
+Do not store sensitive tokens in ordinary client-readable gym objects.
+
+Maintain strict gym_id tenant isolation.
+
+Every owner query must resolve the authenticated owner's gym.
+
+Public QR endpoints must expose only:
+- gym public profile
+- active public plans
+- public plan images
+- registration creation
+
+Never expose:
+- private members
+- payments
+- private settings
+- credentials
+
+==================================================
+19. SIDEBAR / NAVIGATION
+==================================================
+
+Keep navigation simple.
 
 Recommended:
 
-### Due Today
-Amount + number of members.
-
-### Overdue
-Amount + number of members.
-
-### Active Members
-Member count.
-
-Do not create 8–12 KPI cards.
-
-Every metric must justify its existence.
-
-If changing the value would not change the owner's action, it probably does not belong above the fold.
-
----
-
-# 11. "NEEDS ATTENTION" — MOST IMPORTANT COMPONENT
-
-This should become the primary operational section.
-
-Title:
-
-`Needs attention`
-
-Optional:
-
-`View all →`
-
-Prioritize:
-
-1. Overdue
-2. Due today
-3. Partial/unresolved payments if supported by current data
-
-Each row should communicate:
-
-- member name
-- membership plan
-- amount
-- due/overdue state
-- overdue duration
-- relevant action
-
-Example:
-
-```text
-Rahul Sharma
-Monthly
-₹1,500
-4 days overdue
-
-[ WhatsApp ] [ Mark Paid ]
-```
-
-The `Mark Paid` action must be highly visible.
-
-Do NOT hide it inside:
-
-- kebab menu
-- dropdown
-- hover-only interaction
-- secondary modal
-
-The owner should be able to resolve a payment issue immediately.
-
----
-
-# 12. MARK PAID UX
-
-Follow the existing financial/payment contract.
-
-The interaction should be extremely simple.
-
-Example:
-
-```text
-Record Payment
-
-Rahul Sharma
-Monthly Membership
-
-Amount
-₹1,500
-
-Payment Method
-
-○ UPI
-○ Cash
-○ Online
-○ Other
-
-[Cancel] [Confirm Payment]
-```
-
-Use the existing payment method implementation.
-
-Respect existing rules for:
-
-- duplicate prevention
-- partial payments
-- payment history
-- immutable financial records
-- server-side validation
-
-Do not implement fake optimistic UI if rollback is unreliable.
-
-After successful payment:
-
-- update UI
-- show clear success feedback
-- update status immediately
-- remove member from the relevant due/overdue list if appropriate
-
----
-
-# 13. DUE TODAY VS OVERDUE
-
-Do not visually mix these states.
-
-Use clear semantic status treatment.
-
-### Due today
-
-Neutral/amber emphasis.
-
-### Overdue
-
-Red emphasis.
-
-### Paid
-
-Green only where necessary.
-
-### Partial
-
-Use a restrained secondary status.
-
-Do NOT color entire cards red/green.
-
-Use color to communicate status, not decoration.
-
----
-
-# 14. RECENT PAYMENTS
-
-Use a compact table/list.
-
-Columns:
-
-- Member
-- Amount
-- Method
-- Time
-
-Example:
-
-```text
-RECENT PAYMENTS
-
-Rahul Sharma     ₹1,500     UPI      09:42
-Neha Singh       ₹2,000     Cash     09:21
-Amit Kumar       ₹4,500     UPI      08:54
-```
-
-Keep it compact.
-
-No giant cards.
-
-No unnecessary avatars unless they already exist in the design system.
-
----
-
-# 15. COLLECTION TREND
-
-If existing backend data supports it, add a small 7-day collection trend.
-
-Use:
-
-- simple line chart
-- minimal grid
-- clear labels
-- tooltip on interaction
-- no decorative gradients
-- no 3D effects
-- no chart animation that delays understanding
-
-The chart should answer:
-
-> "Is collection moving up or down?"
-
-It should NOT become an analytics dashboard.
-
-If chart data is unavailable or unreliable, omit the chart rather than generating fake data.
-
----
-
-# 16. ANIMATIONS
-
-Animation should communicate state and hierarchy.
-
-Do NOT animate everything.
-
-Use Framer Motion only where it improves UX.
-
-### Page load
-
-Very subtle:
-
-- opacity 0 → 1
-- translateY 4–8px
-
-Duration:
-
-~180–250ms
-
-Use stagger only lightly.
-
-### KPI numbers
-
-Optional small number transition when data changes.
-
-Do not use dramatic counting animations.
-
-### Rows
-
-Subtle hover/background transition.
-
-### Mark Paid
-
-On success:
-
-1. button shows loading state
-2. mutation completes
-3. success feedback
-4. status changes
-5. row transitions out or updates naturally
-
-Use a short transition around 150–250ms.
-
-### Modals/drawers
-
-Use subtle scale/opacity or translate animation.
-
-Avoid springy, bouncy, exaggerated animations.
-
-### Charts
-
-Animate only when useful.
-
-No long chart-drawing animations.
-
-The user should never wait for animation before being able to understand the data.
-
----
-
-# 17. MOTION PRINCIPLE
-
-Use this rule:
-
-> If the animation does not help the user understand what changed, where something went, or what action succeeded, remove it.
-
-The application should feel fast even on slower devices.
-
----
-
-# 18. RESPONSIVE DESIGN
-
-The dashboard must be genuinely responsive.
-
-Do not simply shrink the desktop layout.
-
-### Desktop
-
-Sidebar + content.
-
-Use a comfortable max-width.
-
-Do not stretch content across an unnecessarily huge viewport.
-
-### Tablet
-
-Reduce columns.
-
-Prioritize:
-
-1. Today's collection
-2. Due
-3. Overdue
-4. Needs attention
-
-### Mobile
-
-The dashboard becomes an operational task list.
-
-Order:
-
-```text
-Header
-
-Today's collection
-
-Primary actions
-
-Due today
-
-Overdue
-
-Needs attention
-
-Recent payments
-
-Collection trend
-```
-
-Charts can move below operational data.
-
-Do not force wide tables on mobile.
-
-Use cards/list rows where appropriate.
-
----
-
-# 19. MOBILE PRIMARY ACTIONS
-
-On mobile, the user should be able to quickly:
-
-- Add member
-- Record payment
-- Mark paid
-- WhatsApp member
-
-If appropriate within the existing architecture, consider a compact sticky action area, but do not create an intrusive floating button covering content.
-
----
-
-# 20. SIDEBAR
-
-Simplify navigation.
-
-Recommended information architecture:
-
-```text
-GYMORA
-
-OVERVIEW
 Overview
-
-MEMBERS
 Members
 Registrations
-
-MONEY
 Payments
 Plans
-
-TOOLS
 Gym QR
 
 ----------------
+
 Settings
-```
 
-Use the existing routes if they already exist.
+If Payments does not have enough independent functionality yet, do not create unnecessary duplicate screens.
 
-Do not rename routes just for visual reasons if doing so risks breaking navigation.
+Settings contains:
+- General
+- Payments
+- WhatsApp
+- Reminders
+- Membership Rules
 
-The active navigation state should be obvious but subtle.
+==================================================
+20. DASHBOARD
+==================================================
 
-Avoid huge colored sidebar blocks.
+Continue the previously defined dashboard philosophy.
 
----
+Dashboard is the daily operations control center.
 
-# 21. EMPTY STATES
+Top:
+Gym name / date
+Add Member
 
-Do not show blank dashboard cards.
+Primary:
+Today's Collection
 
-For a new gym with no members:
+Secondary:
+Due Today
+Overdue
+Active Members
 
-```text
-Your gym is ready.
+Main:
+Needs Attention
 
-Add your first member to start tracking
-payments and renewals.
+Show:
+- overdue members
+- due today members
 
-[ Add Member ]
-```
+Direct actions:
+- WhatsApp
+- Mark Paid
 
-For no payments:
+Then:
+Recent Payments
 
-```text
-No payments recorded today.
+Optional:
+small collection trend
 
-Payments will appear here once you record one.
-```
+Do not make the dashboard an analytics wall.
 
-For no overdue members:
+==================================================
+21. UI / UX
+==================================================
 
-```text
-You're all clear.
+Visual language:
 
-No members are currently overdue.
-```
+- clean white/neutral surfaces
+- subtle borders
+- restrained shadows
+- moderate radius
+- strong typography
+- high readability
+- no unnecessary gradients
+- no glassmorphism
+- no decorative blobs
+- no fake AI UI
+- no excessive rounded containers
+- no excessive animations
 
-Empty states should guide the next action.
+Animation:
 
----
+Use Framer Motion only when it improves clarity.
 
-# 22. LOADING STATES
+Preferred:
+180–250ms transitions
+4–8px subtle movement
+button loading states
+modal fade/scale
+row hover
 
-Do not make the interface jump while data loads.
+Avoid:
+bouncy animations
+dramatic entrance animations
+large parallax
+long chart animations
 
-Use:
+All important actions must have:
+- loading state
+- success state
+- error state
+- disabled state where appropriate
 
-- subtle skeletons
-- stable layout dimensions
-- disabled mutation buttons
-- inline loading indicators
+==================================================
+22. RESPONSIVE
+==================================================
 
-Avoid giant loading spinners.
+Test:
 
----
+1440px
+1280px
+1024px
+768px
+430px
+375px
 
-# 23. ERROR STATES
+No horizontal overflow.
 
-Errors should be human-readable.
+Mobile priorities:
 
-Bad:
+1. Collection
+2. Add Member
+3. Due
+4. Overdue
+5. Needs Attention
+6. Members
+7. Recent payments
+8. Secondary settings
 
-```text
-Error: 23505
-```
+==================================================
+23. DATA MIGRATION
+==================================================
 
-Better:
+Do not break existing production data.
 
-```text
-We couldn't record this payment.
+Create proper Supabase migrations.
 
-Please try again.
-```
+Before changing enums or columns:
+- inspect existing migrations
+- preserve existing records
+- backfill new fields
+- add compatibility logic where necessary
 
-Keep technical details in logs, not in the owner UI.
+Do not simply replace the existing database schema.
 
----
+==================================================
+24. TESTING
+==================================================
 
-# 24. ACCESSIBILITY
+Add/update tests for:
 
-Ensure:
+Member:
+- member creation
+- plan association
+- last payment
+- next payment
+- outstanding calculation
 
-- sufficient contrast
-- visible focus states
-- keyboard navigation
-- semantic buttons
-- proper labels
-- accessible dialogs
-- no color-only status communication
-- touch targets approximately 44px or larger where practical
+Payment:
+- full payment
+- partial payment
+- duplicate Mark Paid
+- payment history
 
-Do not sacrifice usability for visual minimalism.
+Cancellation:
+- manual cancellation
+- automatic cancellation
+- grace period
+- reactivation
 
----
+Registration:
+- public registration
+- approval
+- approval with cash
+- approval with UPI
+- approval with local QR
+- partial payment
+- no payment
+- duplicate approval
 
-# 25. PERFORMANCE
+Plans:
+- plan image upload
+- public image display
 
-This is a production dashboard.
+Security:
+- cross-gym access blocked
+- public QR cannot access private data
+- secrets never exposed
 
-Do not:
+Automation:
+- trigger evaluation
+- disabled rule
+- opt-out
+- duplicate prevention
+- cancellation stops future reminders
 
-- add unnecessary dependencies
-- create expensive client-side computations
-- fetch the same data multiple times
-- introduce large animation libraries beyond existing dependencies
-- render unnecessary charts
-- cause layout shifts
+==================================================
+25. IMPORTANT IMPLEMENTATION ORDER
+==================================================
 
-Reuse existing Supabase queries/server actions when possible.
+Do NOT implement everything randomly.
 
-Prefer server-side data fetching where the current architecture supports it.
+First:
 
-Keep client components only where interactivity actually requires them.
+1. Audit current architecture
+2. Audit current DB/RLS
+3. Fix production source-of-truth issues
+4. Refactor onboarding
+5. Add Settings architecture
+6. Improve membership model
+7. Improve Members UI
+8. Improve Member Detail
+9. Improve Registration Approval
+10. Add Plan Images
+11. Add Membership Rules
+12. Add generic Reminder/Automation engine
+13. Keep WhatsApp Business integration as a provider boundary
+14. Keep payment gateway as a provider boundary
+15. Add tests
+16. Run complete QA
 
----
+==================================================
+26. DO NOT IMPLEMENT THESE NOW
+==================================================
 
-# 26. DATA INTEGRITY
-
-This is a financial application.
-
-Do NOT fake data.
-
-Do NOT hardcode dashboard metrics.
-
-Do NOT create fake charts.
-
-Do NOT alter payment calculations simply to make the UI look correct.
-
-Every displayed number must come from the actual application data layer.
-
-Respect:
-
-- Supabase RLS
-- owner → gym ownership
-- payment records
-- membership cycle
-- due date
-- overdue calculation
-- partial payments
-- payment methods
-
----
-
-# 27. DO NOT CHANGE PRODUCT SCOPE
-
-Do NOT add:
-
-- AI assistant
-- AI insights
+Do NOT implement:
+- WhatsApp Web browser automation
+- WhatsApp device linking automation
+- fake Meta OAuth
+- fake WABA connection
+- fake gateway success
+- fake payment verification
+- customer dashboard
+- customer mobile app
 - attendance
-- workout tracking
-- trainer management
-- customer app
-- marketplace
+- trainers
+- workout plans
 - advanced analytics
-- fake automation
-- payment gateway integration
-- WhatsApp API
-
-unless those features already exist in the codebase and are required by the current implementation.
-
-This task is primarily a dashboard UX/UI redesign.
-
----
-
-# 28. CODE QUALITY
-
-Before implementation:
-
-Identify the existing dashboard components.
-
-Then decide:
-
-- what to keep
-- what to refactor
-- what to remove
-- what to create
-
-Prefer small reusable components.
-
-For example:
-
-```text
-DashboardHeader
-TodayCollection
-MetricSummary
-AttentionList
-AttentionRow
-RecentPayments
-CollectionTrend
-EmptyState
-```
-
-But do not create abstractions that are unnecessary for the current codebase.
-
-Follow the existing naming and folder conventions.
-
----
-
-# 29. DESIGN TOKENS
-
-Centralize repeated visual values where the project architecture allows.
-
-Maintain consistent:
-
-- spacing
-- typography
-- radius
-- border
-- shadow
-- status colors
-- transitions
-
-Do not introduce random values for every component.
-
----
-
-# 30. FINAL QUALITY BAR
-
-Before finishing, test the dashboard at:
-
-- 1440px desktop
-- 1280px desktop
-- 1024px tablet
-- 768px tablet
-- 430px mobile
-- 375px mobile
-
-Check:
-
-- no horizontal overflow
-- no clipped content
-- no broken tables
-- no overlapping buttons
-- no layout shift
-- no unreadable text
-- no excessive whitespace
-- no visual clutter
-- no unnecessary animations
-
----
-
-# 31. UX ACCEPTANCE TEST
-
-A gym owner should be able to answer these within approximately 5 seconds of opening the dashboard:
-
-### Question 1
-How much did I collect today?
-
-### Question 2
-How much money is currently due?
-
-### Question 3
-Who is overdue?
-
-### Question 4
-What do I need to do right now?
-
-### Question 5
-Can I mark a payment as received immediately?
-
-If the interface fails any of these, revise the hierarchy.
-
----
-
-# 32. IMPORTANT DESIGN PHILOSOPHY
-
-Do not try to make Gymora look "fancy."
-
-Make it look:
-
-> OBVIOUS.
-
-The owner should not have to learn the dashboard.
-
-The UI should naturally guide their eyes:
-
-```text
-WHAT IS HAPPENING?
-        ↓
-WHAT NEEDS ATTENTION?
-        ↓
-WHAT ACTION DO I TAKE?
-        ↓
-DONE
-```
-
-This is more important than visual decoration.
-
----
-
-# 33. IMPLEMENTATION PROCESS
-
-Follow this exact sequence:
-
-### Step 1
-Scan the existing codebase.
-
-### Step 2
-Identify the current owner dashboard implementation.
-
-### Step 3
-Identify all existing reusable UI components.
-
-### Step 4
-Map existing data to the new dashboard structure.
-
-### Step 5
-Implement the new visual hierarchy.
-
-### Step 6
-Remove unnecessary decorative/AI-generated UI.
-
-### Step 7
-Improve responsive behaviour.
-
-### Step 8
-Add restrained interaction animations.
-
-### Step 9
-Test all dashboard actions.
-
-### Step 10
-Run lint/build/tests.
-
-### Step 11
-Fix all regressions.
-
-### Step 12
-Review the final dashboard visually and functionally.
-
-Do not stop after creating the visual layout.
-
-The final result must be a functioning production dashboard using the existing application architecture.
-
----
-
-# FINAL OBJECTIVE
-
-Transform the current Gymora owner dashboard from a generic/AI-looking SaaS dashboard into a:
-
-**clean, premium, operational gym payment control center**
-
-with:
-
-- clear hierarchy
-- minimal visual noise
-- strong payment visibility
-- obvious due/overdue states
-- one-click actions
-- subtle purposeful animation
-- excellent mobile UX
-- real data
-- no fake analytics
-- no unnecessary features
-- no broken existing functionality
-
-Prioritize usability and clarity over visual novelty.
+- unnecessary AI features
+
+The architecture should be ready for WhatsApp Business API and payment gateways later, but the current system must work correctly without them.
+
+==================================================
+FINAL ACCEPTANCE CRITERIA
+==================================================
+
+A non-technical gym owner should be able to:
+
+1. Sign up
+2. Create gym
+3. Create plans
+4. Enter dashboard
+5. Print/share QR
+6. Receive QR registration
+7. Review the person's details
+8. Select how payment was received
+9. Approve the registration
+10. See the member automatically created
+11. See plan/payment/due information without re-entering anything
+12. Mark future payments in one action
+13. Cancel a membership without deleting history
+14. Configure local QR from Settings
+15. Configure payment gateway later from Settings
+16. Configure WhatsApp later from Settings
+17. Configure reminder rules later from Settings
+
+The owner should not need technical knowledge to use the core product.
+
+Most importantly:
+
+DO NOT BUILD A BEAUTIFUL SYSTEM THAT IS HARD TO USE.
+
+Build the simplest operational system possible.
+
+Make it obvious.

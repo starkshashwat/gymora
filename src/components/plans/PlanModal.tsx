@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MembershipPlan } from '@/lib/types/database';
 import { formatINR } from '@/lib/utils/currency';
-import { X, Layers, Loader2 } from 'lucide-react';
+import { X, Layers, Loader2, Image as ImageIcon, ListPlus } from 'lucide-react';
 
 interface PlanModalProps {
   isOpen: boolean;
@@ -22,6 +22,8 @@ export default function PlanModal({
   const [durationDays, setDurationDays] = useState(30);
   const [price, setPrice] = useState(1500);
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [featuresText, setFeaturesText] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,12 +34,16 @@ export default function PlanModal({
       setDurationDays(plan.duration_days);
       setPrice(plan.price);
       setDescription(plan.description || '');
+      setImageUrl(plan.image_url || '');
+      setFeaturesText((plan.features || []).join('\n'));
       setIsActive(plan.is_active);
     } else {
       setName('');
       setDurationDays(30);
       setPrice(1500);
       setDescription('');
+      setImageUrl('');
+      setFeaturesText('');
       setIsActive(true);
     }
     setError(null);
@@ -62,6 +68,11 @@ export default function PlanModal({
       return;
     }
 
+    const parsedFeatures = featuresText
+      .split(/[\n,]+/)
+      .map((f) => f.trim())
+      .filter(Boolean);
+
     try {
       setIsSubmitting(true);
       setError(null);
@@ -75,6 +86,8 @@ export default function PlanModal({
           duration_days: Number(durationDays),
           price: Number(price),
           description: description.trim() || undefined,
+          image_url: imageUrl.trim() || undefined,
+          features: parsedFeatures,
           is_active: isActive,
         }),
       });
@@ -95,15 +108,18 @@ export default function PlanModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
+            <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700">
               <Layers className="h-5 w-5" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">
-              {plan ? 'Edit Membership Plan' : 'Create New Plan'}
-            </h2>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                {plan ? 'Edit Membership Plan' : 'Create New Plan'}
+              </h2>
+              <p className="text-xs text-slate-500">Configure pricing, duration, features, and 16:9 banner.</p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -122,7 +138,7 @@ export default function PlanModal({
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
               Plan Name *
             </label>
             <input
@@ -138,7 +154,7 @@ export default function PlanModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Duration (Days) *
               </label>
               <input
@@ -153,7 +169,7 @@ export default function PlanModal({
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Price (₹) *
               </label>
               <input
@@ -170,16 +186,61 @@ export default function PlanModal({
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
-              Description <span className="font-normal text-slate-400">(Optional)</span>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Description <span className="font-normal text-slate-400 lowercase">(optional)</span>
             </label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Features included in this plan..."
+              placeholder="Short summary of this membership plan..."
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition"
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition"
+            />
+          </div>
+
+          {/* 16:9 Image URL */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Plan Banner Image URL (16:9)
+            </label>
+            <div className="relative">
+              <ImageIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/... (16:9 ratio)"
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-slate-300 py-2.5 pl-10 pr-4 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition"
+              />
+            </div>
+            {imageUrl && (
+              <div className="mt-2 aspect-video w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                <img
+                  src={imageUrl}
+                  alt="Plan preview"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Features bullet points */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Plan Features / Highlights <span className="font-normal text-slate-400 lowercase">(one per line)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={featuresText}
+              onChange={(e) => setFeaturesText(e.target.value)}
+              placeholder={"Full Gym Floor Access\nFree Locker Access\n1 Free Trainer Assessment\nSteam & Shower Access"}
+              disabled={isSubmitting}
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition font-mono text-xs"
             />
           </div>
 
@@ -192,7 +253,7 @@ export default function PlanModal({
               className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
             <label htmlFor="isActiveCheck" className="text-sm font-medium text-slate-700 cursor-pointer">
-              Active plan (available for new registrations and QR onboarding)
+              Active plan (shown on reception QR onboarding portal)
             </label>
           </div>
 

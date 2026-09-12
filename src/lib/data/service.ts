@@ -9,6 +9,11 @@ import {
   DashboardMetrics,
   PaymentMethod,
   PaymentStatus,
+  MembershipLifecycle,
+  AutomationRule,
+  AutomationLog,
+  AutomationEventType,
+  SettingsPayload,
 } from '../types/database';
 import {
   initialGym,
@@ -29,6 +34,8 @@ class GymStore {
   memberships: Membership[] = [...initialMemberships];
   payments: Payment[] = [...initialPayments];
   registrations: RegistrationRequest[] = [...initialRegistrations];
+  automationRules: AutomationRule[] = [];
+  automationLogs: AutomationLog[] = [];
   userGymMap: Map<string, string> = new Map();
 
   setUserGym(userId: string, gymId: string) {
@@ -87,7 +94,7 @@ class GymStore {
   getMembersWithDetails(
     gymId?: string,
     query = '',
-    filter: 'all' | 'paid' | 'due' | 'overdue' = 'all'
+    filter: 'all' | 'paid' | 'due' | 'overdue' | 'paused' | 'cancelled' = 'all'
   ): MemberWithDetails[] {
     const gym = this.getGym(gymId);
     const gymMembers = this.members.filter((m) => m.gym_id === gym.id);
@@ -156,6 +163,10 @@ class GymStore {
       );
     } else if (filter === 'overdue') {
       result = result.filter((m) => m.membership && m.membership.is_overdue);
+    } else if (filter === 'paused') {
+      result = result.filter((m) => m.membership?.lifecycle === 'paused');
+    } else if (filter === 'cancelled') {
+      result = result.filter((m) => m.membership?.lifecycle === 'cancelled');
     }
 
     return result;
@@ -261,6 +272,7 @@ class GymStore {
       phone: cleanPhone,
       email: params.email?.trim() || null,
       status: 'active',
+      whatsapp_opt_in: (params as any).whatsapp_opt_in ?? false,
       joined_at: startDate,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -278,6 +290,7 @@ class GymStore {
       due_date: startDate,
       end_date: endDate,
       status: 'pending',
+      lifecycle: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -428,6 +441,8 @@ class GymStore {
           duration_days: plan.duration_days,
           price: plan.price,
           description: plan.description || null,
+          image_url: plan.image_url !== undefined ? plan.image_url : this.plans[idx].image_url,
+          features: plan.features !== undefined ? plan.features : this.plans[idx].features,
           is_active: plan.is_active !== undefined ? plan.is_active : this.plans[idx].is_active,
           updated_at: new Date().toISOString(),
         };
@@ -442,6 +457,8 @@ class GymStore {
       duration_days: plan.duration_days,
       price: plan.price,
       description: plan.description || null,
+      image_url: plan.image_url || null,
+      features: plan.features || [],
       is_active: plan.is_active !== undefined ? plan.is_active : true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -471,6 +488,7 @@ class GymStore {
     phone: string;
     email?: string;
     plan_id: string;
+    whatsapp_opt_in?: boolean;
   }): { success: boolean; registration_id: string; gym_name: string; plan_name: string; price: number } {
     const gym = this.gyms.find(
       (g) =>
@@ -495,6 +513,7 @@ class GymStore {
       plan_id: plan.id,
       plan_name_snapshot: plan.name,
       plan_price_snapshot: plan.price,
+      whatsapp_opt_in: Boolean(params.whatsapp_opt_in),
       status: 'pending',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -555,6 +574,7 @@ class GymStore {
       due_date: start,
       end_date: end,
       status: 'pending',
+      lifecycle: 'active',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -568,6 +588,421 @@ class GymStore {
       member_id: member.id,
       membership_id: mshipId,
     };
+  }
+
+  cancelMembership(
+    membershipId: string,
+    reason?: string,
+    gymId?: string
+  ): { success: boolean; membership_id: string; membership: Membership } & Membership {
+    const gym = this.getGym(gymId);
+    const mship = this.memberships.find((m) => m.id === membershipId && (!gymId || m.gym_id === gym.id));
+    if (!mship) throw new Error('Membership not found');
+
+    mship.lifecycle = 'cancelled';
+    mship.cancelled_at = new Date().toISOString();
+    mship.cancellation_reason = reason || 'Cancelled by gym owner';
+    mship.updated_at = new Date().toISOString();
+
+    // Check if member has other active memberships
+    const hasOtherActive = this.memberships.some(
+      (m) => m.member_id === mship.member_id && m.lifecycle === 'active' && m.id !== membershipId
+    );
+    if (!hasOtherActive) {
+      const mem = this.members.find((m) => m.id === mship.member_id);
+      if (mem) {
+        mem.status = 'inactive';
+        mem.updated_at = new Date().toISOString();
+      }
+    }
+
+    return { success: true, membership_id: membershipId, membership: mship, ...mship };
+  }
+
+  pauseMembership(membershipId: string, gymId?: string): { success: boolean; membership_id: string; membership: Membership } & Membership {
+    const gym = this.getGym(gymId);
+    const mship = this.memberships.find((m) => m.id === membershipId && (!gymId || m.gym_id === gym.id));
+    if (!mship) throw new Error('Membership not found');
+
+    mship.lifecycle = 'paused';
+    mship.paused_at = new Date().toISOString();
+    mship.updated_at = new Date().toISOString();
+    return { success: true, membership_id: membershipId, membership: mship, ...mship };
+  }
+
+  reactivateMembership(membershipId: string, gymId?: string): { success: boolean; membership_id: string; membership: Membership } & Membership {
+    const gym = this.getGym(gymId);
+    const mship = this.memberships.find((m) => m.id === membershipId && (!gymId || m.gym_id === gym.id));
+    if (!mship) throw new Error('Membership not found');
+
+    mship.lifecycle = 'active';
+    mship.paused_at = null;
+    mship.cancelled_at = null;
+    mship.updated_at = new Date().toISOString();
+
+    const mem = this.members.find((m) => m.id === mship.member_id);
+    if (mem) {
+      mem.status = 'active';
+      mem.updated_at = new Date().toISOString();
+    }
+
+    return { success: true, membership_id: membershipId, membership: mship, ...mship };
+  }
+
+  approveRegistrationWithPayment(params: {
+    registration_id: string;
+    payment_received?: boolean;
+    amount_received?: number;
+    payment_method?: PaymentMethod;
+    notes?: string;
+    gym_id?: string;
+  }): {
+    success: boolean;
+    member: Member;
+    membership: Membership;
+    payment: Payment | null;
+    member_id: string;
+    membership_id: string;
+    payment_id?: string;
+    full_name: string;
+    payment_status: PaymentStatus;
+    remaining_balance: number;
+  } {
+    const reg = this.registrations.find((r) => r.id === params.registration_id);
+    if (!reg) throw new Error('Registration request not found');
+    const gym = this.getGym(params.gym_id || reg.gym_id);
+    if (reg.status === 'converted') throw new Error('Registration is already converted');
+
+    let member = this.members.find((m) => m.gym_id === gym.id && m.phone === reg.phone);
+    if (!member) {
+      member = {
+        id: crypto.randomUUID(),
+        gym_id: gym.id,
+        full_name: reg.full_name,
+        phone: reg.phone,
+        email: reg.email,
+        status: 'active',
+        whatsapp_opt_in: reg.whatsapp_opt_in ?? false,
+        joined_at: getTodayDateString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      this.members.unshift(member);
+    }
+
+    const plan = this.plans.find((p) => p.id === reg.plan_id);
+    const duration = plan ? plan.duration_days : 30;
+    const start = getTodayDateString();
+    const d = new Date(start);
+    d.setDate(d.getDate() + duration);
+    const end = d.toISOString().slice(0, 10);
+
+    const planPrice = reg.plan_price_snapshot || plan?.price || 0;
+    const amountReceived = params.payment_received ? Number(params.amount_received || 0) : 0;
+    let paymentStatus: PaymentStatus = 'pending';
+    let remainingBalance = planPrice;
+
+    if (params.payment_received && amountReceived > 0) {
+      if (amountReceived >= planPrice) {
+        paymentStatus = 'paid';
+        remainingBalance = 0;
+      } else {
+        paymentStatus = 'partial';
+        remainingBalance = planPrice - amountReceived;
+      }
+    }
+
+    const mshipId = crypto.randomUUID();
+    const membership: Membership = {
+      id: mshipId,
+      gym_id: gym.id,
+      member_id: member.id,
+      plan_id: reg.plan_id,
+      plan_name_snapshot: reg.plan_name_snapshot || plan?.name || 'Membership',
+      amount_due: planPrice,
+      start_date: start,
+      due_date: start,
+      end_date: end,
+      status: paymentStatus,
+      lifecycle: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.memberships.unshift(membership);
+
+    let paymentId: string | undefined = undefined;
+    let paymentRecord: Payment | null = null;
+    if (params.payment_received && amountReceived > 0) {
+      paymentId = crypto.randomUUID();
+      paymentRecord = {
+        id: paymentId,
+        gym_id: gym.id,
+        member_id: member.id,
+        membership_id: mshipId,
+        amount: amountReceived,
+        payment_method: params.payment_method || 'cash',
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        notes: params.notes?.trim() || 'Payment received upon QR registration approval',
+        created_at: new Date().toISOString(),
+      };
+      this.payments.unshift(paymentRecord);
+    }
+
+    reg.status = 'converted';
+    reg.updated_at = new Date().toISOString();
+
+    return {
+      success: true,
+      member,
+      membership,
+      payment: paymentRecord,
+      member_id: member.id,
+      membership_id: mshipId,
+      payment_id: paymentId,
+      full_name: reg.full_name,
+      payment_status: paymentStatus,
+      remaining_balance: remainingBalance,
+    };
+  }
+
+  getSettings(gymId?: string): SettingsPayload {
+    const gym = this.getGym(gymId);
+    return {
+      general: {
+        name: gym.name,
+        phone: gym.phone || '',
+        email: gym.email || undefined,
+        address: gym.address || undefined,
+        slug: gym.slug,
+        logo_url: gym.logo_url || undefined,
+      },
+      payments: {
+        upi_id: gym.upi_id || undefined,
+        upi_qr_url: gym.upi_qr_url || undefined,
+        payment_instructions: gym.payment_instructions || undefined,
+        gateway_provider: gym.gateway_provider || null,
+        gateway_key_id: gym.gateway_key_id || undefined,
+        is_gateway_enabled: gym.payment_mode === 'gateway',
+      },
+      whatsapp: {
+        whatsapp_mode: gym.whatsapp_mode || 'local_click_to_chat',
+        fb_waba_id: gym.fb_waba_id || undefined,
+        fb_phone_number_id: gym.fb_phone_number_id || undefined,
+      },
+      rules: {
+        auto_cancel_overdue_days: gym.auto_cancel_overdue_days || null,
+      },
+    };
+  }
+
+  updateSettings(gymId: string, payload: SettingsPayload): Gym {
+    const gym = this.getGym(gymId);
+    if (payload.general) {
+      if (payload.general.name) gym.name = payload.general.name.trim();
+      if (payload.general.phone) gym.phone = payload.general.phone.trim();
+      if (payload.general.email !== undefined) gym.email = payload.general.email?.trim() || null;
+      if (payload.general.address !== undefined) gym.address = payload.general.address?.trim() || null;
+      if (payload.general.logo_url !== undefined) gym.logo_url = payload.general.logo_url || null;
+      if (payload.general.slug) {
+        gym.slug = payload.general.slug.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      }
+    }
+
+    if (payload.payments) {
+      if (payload.payments.upi_id !== undefined) gym.upi_id = payload.payments.upi_id?.trim() || null;
+      if (payload.payments.upi_qr_url !== undefined) gym.upi_qr_url = payload.payments.upi_qr_url || null;
+      if (payload.payments.payment_instructions !== undefined) gym.payment_instructions = payload.payments.payment_instructions;
+      if (payload.payments.gateway_provider !== undefined) gym.gateway_provider = payload.payments.gateway_provider;
+      if (payload.payments.gateway_key_id !== undefined) gym.gateway_key_id = payload.payments.gateway_key_id?.trim() || null;
+      if (payload.payments.gateway_key_secret) gym.gateway_key_secret = payload.payments.gateway_key_secret?.trim() || null;
+      if (payload.payments.is_gateway_enabled !== undefined) {
+        gym.payment_mode = payload.payments.is_gateway_enabled ? 'gateway' : 'local_qr';
+      }
+    }
+
+    if (payload.whatsapp) {
+      if (payload.whatsapp.whatsapp_mode) gym.whatsapp_mode = payload.whatsapp.whatsapp_mode;
+      if (payload.whatsapp.fb_waba_id !== undefined) gym.fb_waba_id = payload.whatsapp.fb_waba_id || null;
+      if (payload.whatsapp.fb_phone_number_id !== undefined) gym.fb_phone_number_id = payload.whatsapp.fb_phone_number_id || null;
+      if (payload.whatsapp.fb_access_token) gym.fb_access_token = payload.whatsapp.fb_access_token || null;
+    }
+
+    if (payload.rules) {
+      if (payload.rules.auto_cancel_overdue_days !== undefined) {
+        gym.auto_cancel_overdue_days = payload.rules.auto_cancel_overdue_days;
+      }
+    }
+
+    gym.updated_at = new Date().toISOString();
+    return gym;
+  }
+
+  ensureDefaultAutomationRules(gymId: string): AutomationRule[] {
+    let gymRules = this.automationRules.filter((r) => r.gym_id === gymId);
+    if (gymRules.length === 0) {
+      const defaults: Omit<AutomationRule, 'id' | 'created_at' | 'updated_at'>[] = [
+        {
+          gym_id: gymId,
+          event_type: 'registration_submitted',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_registration_received',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'registration_approved',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_welcome',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'payment_due_soon',
+          timing_offset_days: -3,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_payment_due',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'payment_due_today',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_payment_due_today',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'payment_overdue',
+          timing_offset_days: 3,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_payment_overdue',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'payment_received',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_payment_receipt',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'partial_payment_received',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_partial_receipt',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'membership_expiring_soon',
+          timing_offset_days: -7,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_plan_expiry_warning',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'membership_expired',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_plan_expired',
+          max_sends: 1,
+        },
+        {
+          gym_id: gymId,
+          event_type: 'membership_cancelled',
+          timing_offset_days: 0,
+          is_enabled: true,
+          channel: 'whatsapp',
+          template_name: 'gym_membership_cancelled',
+          max_sends: 1,
+        },
+      ];
+
+      const created = defaults.map((d) => ({
+        ...d,
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+      this.automationRules.push(...created);
+      gymRules = created;
+    }
+    return gymRules;
+  }
+
+  getAutomationRules(gymId?: string): AutomationRule[] {
+    const gym = this.getGym(gymId);
+    return this.ensureDefaultAutomationRules(gym.id);
+  }
+
+  updateAutomationRule(
+    arg1: string,
+    arg2: string | Partial<AutomationRule>,
+    arg3?: Partial<AutomationRule> | string
+  ): AutomationRule {
+    let gymId: string | undefined;
+    let ruleId: string;
+    let updates: Partial<AutomationRule>;
+
+    if (typeof arg2 === 'string') {
+      gymId = arg1;
+      ruleId = arg2;
+      updates = (arg3 as Partial<AutomationRule>) || {};
+    } else {
+      ruleId = arg1;
+      updates = arg2 || {};
+      gymId = arg3 as string | undefined;
+    }
+
+    const gym = this.getGym(gymId);
+    const rule = this.automationRules.find((r) => r.id === ruleId && (!gymId || r.gym_id === gym.id));
+    if (!rule) throw new Error('Automation rule not found');
+
+    if (updates.is_enabled !== undefined) rule.is_enabled = updates.is_enabled;
+    if (updates.timing_offset_days !== undefined) rule.timing_offset_days = updates.timing_offset_days;
+    if (updates.template_name) rule.template_name = updates.template_name;
+    if (updates.max_sends !== undefined) rule.max_sends = updates.max_sends;
+    rule.updated_at = new Date().toISOString();
+    return rule;
+  }
+
+  checkAndApplyAutoCancellation(gymId?: string): number {
+    const gym = this.getGym(gymId);
+    if (!gym.auto_cancel_overdue_days || gym.auto_cancel_overdue_days <= 0) return 0;
+
+    let cancelledCount = 0;
+    const gymMemberships = this.memberships.filter((m) => m.gym_id === gym.id && m.lifecycle === 'active');
+
+    for (const mship of gymMemberships) {
+      const relatedPayments = this.payments.filter((p) => p.membership_id === mship.id && p.status === 'paid');
+      const paid = relatedPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const balance = mship.amount_due - paid;
+
+      if (balance > 0 && isOverdue(mship.due_date, balance)) {
+        const daysOverdue = getDaysOverdue(mship.due_date);
+        if (daysOverdue >= gym.auto_cancel_overdue_days) {
+          this.cancelMembership(mship.id, `Auto-cancelled: exceeded ${gym.auto_cancel_overdue_days} days overdue`, gym.id);
+          cancelledCount++;
+        }
+      }
+    }
+    return cancelledCount;
   }
 
   onboardGymOwner(payload: import('../types/database').OnboardingPayload): {
@@ -585,19 +1020,19 @@ class GymStore {
       name: payload.gym_name.trim(),
       slug: cleanSlug,
       phone: normalizePhone(payload.phone),
-      email: null,
+      email: payload.email?.trim() || null,
       address: payload.address?.trim() || null,
       logo_url: null,
-      payment_mode: payload.payment_mode,
+      payment_mode: payload.payment_mode || 'local_qr',
       upi_id: payload.upi_id?.trim() || null,
       upi_qr_url: payload.upi_qr_url || null,
-      gateway_provider: payload.gateway_provider || null,
-      gateway_key_id: payload.gateway_key_id?.trim() || null,
-      gateway_key_secret: payload.gateway_key_secret?.trim() || null,
-      whatsapp_mode: payload.whatsapp_mode,
-      fb_waba_id: payload.fb_waba_id?.trim() || null,
-      fb_phone_number_id: payload.fb_phone_number_id?.trim() || null,
-      fb_access_token: payload.fb_access_token?.trim() || null,
+      gateway_provider: (payload as any).gateway_provider || null,
+      gateway_key_id: (payload as any).gateway_key_id?.trim() || null,
+      gateway_key_secret: (payload as any).gateway_key_secret?.trim() || null,
+      whatsapp_mode: payload.whatsapp_mode || 'local_click_to_chat',
+      fb_waba_id: (payload as any).fb_waba_id?.trim() || null,
+      fb_phone_number_id: (payload as any).fb_phone_number_id?.trim() || null,
+      fb_access_token: (payload as any).fb_access_token?.trim() || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -636,6 +1071,7 @@ class GymStore {
           phone: m.phone,
           email: m.email || null,
           status: 'active',
+          whatsapp_opt_in: false,
           joined_at: m.start_date || getTodayDateString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -658,6 +1094,7 @@ class GymStore {
           due_date: m.due_date || getTodayDateString(),
           end_date: null,
           status: 'pending',
+          lifecycle: 'active',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
